@@ -350,14 +350,24 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
-  thread_current ()->priority = new_priority;
+  struct thread *curr_thread = thread_current ();
+  curr_thread->priority = new_priority;
+  if (new_priority > curr_thread->effective_priority) 
+    {
+      curr_thread->effective_priority = new_priority;
+    }
+  // ********** TO DO ********** 
+  // If priority decreases, a comparison with
+  // list_begin(curr_thread->locks) to grab the lock
+  // list_begin(lock->semaphore->waiters) to grab another thread
+  // grab that effective priority for next highest donor                             
 }
 
 /* Returns the current thread's priority. */
 int
 thread_get_priority (void) 
 {
-  return thread_current ()->priority;
+  return thread_current ()->effective_priority;
 }
 
 /* Sets the current thread's nice value to NICE. */
@@ -485,6 +495,7 @@ thread_init (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
+  t->effective_priority = priority;
 #ifdef USERPROG
   t->process = NULL;
 #endif   
