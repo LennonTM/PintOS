@@ -96,7 +96,7 @@ struct thread
     int priority;                       /* Priority. */
     struct list_elem allelem;           /* List element for all threads list. */
     fixed_point recent_cpu;             /* Measure of received cpu time. */
-    uint32_t nice;                      /* Threads willingness to yield*/
+    int32_t nice;                       /* Threads willingness to yield*/
 
 
     /* Shared between thread.c and synch.c. */

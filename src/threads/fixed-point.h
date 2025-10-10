@@ -17,7 +17,7 @@ typedef int32_t fixed_point;
 #define fixed_to_int_floor(x) ((x) / F)
 
 /* Converts fixed point to int32_t by rounding to nearest*/
-#define fixed_to_int_nearest(x) (((x) >= 0) ? ((x) + F / 2) : ((x) - F / 2))
+#define fixed_to_int_nearest(x) (((x) >= 0) ? (((x) + F / 2) / F) : (((x) - F / 2) / F))
 
 /* Adds fixed point x to integer n, returning fixed point*/
 #define addf(x,n) ((x) + (n) * F)
