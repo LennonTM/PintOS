@@ -3,6 +3,8 @@
 
 #include <inttypes.h>
 
+typedef int32_t fixed_point;
+
 #define FRACTIONAL_BITS 14
 
 /* Fixed Point Conversion Constant*/
