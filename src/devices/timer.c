@@ -118,8 +118,7 @@ timer_sleep (int64_t ticks)
 
   // Initialise semaphore
   struct semaphore sema;
-  unsigned value = 0; 
-  sema_init(&sema, value);
+  sema_init(&sema, 0);
 
   ASSERT (intr_get_level () == INTR_ON);
 
