@@ -239,6 +239,28 @@ thread_block (void)
   schedule ();
 }
 
+void
+yield_if_lower_priority(void) {
+  /* the highest priority ready thread */
+  enum intr_level old_level = intr_disable();
+  if (list_empty(&ready_list)) {
+    intr_set_level(old_level);
+    return;
+  }
+  struct thread* top_thread = list_entry(list_front(&ready_list),
+                                         struct thread, 
+                                         elem);
+  if (top_thread->effective_priority > thread_current()->effective_priority) {
+    if (intr_context()) {
+      intr_yield_on_return();
+    }
+    else {
+      thread_yield();
+    }
+  }
+  intr_set_level(old_level);
+}
+
 /* Transitions a blocked thread T to the ready-to-run state.
    This is an error if T is not blocked.  (Use thread_yield() to
    make the running thread ready.)

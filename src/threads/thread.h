@@ -145,5 +145,6 @@ int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
 list_less_func sort_threads_by_effective_priority;
+void yield_if_lower_priority(void);
 
 #endif /* threads/thread.h */
