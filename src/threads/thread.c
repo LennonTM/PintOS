@@ -12,6 +12,8 @@
 #include "threads/synch.h"
 #include "threads/vaddr.h"
 
+#include "fixed-point.h"
+
 /* Random value for struct thread's `magic' member.
    Used to detect stack overflow.  See the big comment at the top
    of thread.h for details. */
@@ -73,6 +75,61 @@ static tid_t allocate_tid (void);
 #ifdef USERPROG
 static bool is_user_mode (struct thread *);
 #endif
+
+/* Calculates the system-wide load_avg.
+   Formula: load_avg = (59/60)*load_avg + (1/60)*ready_threads */
+static void
+calculate_load_avg (void)
+{
+  /* ready_threads: running thread + ready_list size. Excludes idle thread. */
+  int ready_threads = threads_ready + (thread_current() != idle_thread ? 1 : 0);
+  
+  /* (59/60) * load_avg */
+  fixed_point fraction_59_60 = int_to_fixed(59) / 60;
+  fixed_point term1 = mulf(fraction_59_60, term1);
+
+  /* (1/60) * ready_threads */
+  fixed_point fraction_1_60 = int_to_fixed(1) / 60;
+  fixed_point term2 = fraction_1_60 * ready_threads;
+
+  load_avg = term1 + term2;
+}
+
+/* Calculates the recent_cpu of thread t 
+   Formula: recent_cpu = (2*load_avg)/(2*load_avg + 1) * recent_cpu + nice */
+static void
+calculate_recent_cpu (struct thread *t)
+{
+  if (t == idle_thread) return;
+
+  /* Coefficient C = (2*load_avg)/(2*load_avg + 1) */
+  fixed_point numerator = 2 * load_avg;
+  fixed_point denominator = addf((2*load_avg), 1);
+  fixed_point coefficient = divf(numerator, denominator);
+
+  /* recent_cpu = C * recent_cpu + nice */
+  fixed_point new_recent_cpu = mulf(coefficient, t->recent_cpu) + t->nice;
+  t->recent_cpu = new_recent_cpu;
+}
+
+/* Calculates the priority of a thread t based on recent_cpu and nice.
+   Formula: priority = PRI_MAX - (recent_cpu / 4) - (nice * 2) */
+static void
+calculate_priority (struct thread *t)
+{
+  if (t == idle_thread) return;
+
+  /* Term 1: recent_cpu / 4 */
+  fixed_point term1 = t->recent_cpu / 4;
+
+  /* Term 2: nice * 2 */
+  int term2 = t->nice * 2;
+
+  /* PRI_MAX - Term 1 - Term 2 */
+  fixed_point new_priority_fp = int_to_fixed(PRI_MAX) - term1 - term2;
+  int new_priority = fixed_to_int_nearest(new_priority_fp);
+  t->priority = new_priority;
+}
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
