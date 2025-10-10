@@ -401,6 +401,19 @@ thread_get_recent_cpu (void)
   return 0;
 }
 
+/* list_less_func that is used to insert threads
+ * into lists in the order of decreasing priority */
+bool sort_threads_by_effective_priority (const struct list_elem *a_,
+                                         const struct list_elem *b_,
+                                         void *aux UNUSED) {
+  struct thread *a = list_entry(a_, struct thread, elem);
+  struct thread *b = list_entry(b_, struct thread, elem);
+  /* priorities are compared using (>)
+   * to insert a new thread in the end of a cluster
+   * of threads with the same priority */
+  return a->effective_priority > b->effective_priority;
+}
+
 /* Idle thread.  Executes when no other thread is ready to run.
 
    The idle thread is initially put on the ready list by
