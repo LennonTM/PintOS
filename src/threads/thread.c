@@ -11,6 +11,7 @@
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "devices/timer.h"
 
 #include "fixed-point.h"
 
@@ -60,6 +61,8 @@ bool thread_mlfqs;
 
 /* Average number of threads ready to run over the past minute. */
 fixed_point load_avg;
+/* How many ticks it takes for a thread to recalculate priority. */
+#define PRIORITY_FREQ 4
 
 static void kernel_thread (thread_func *, void *aux);
 
@@ -82,7 +85,7 @@ static void
 calculate_load_avg (void)
 {
   /* ready_threads: running thread + ready_list size. Excludes idle thread. */
-  int ready_threads = threads_ready;
+  int ready_threads = threads_ready + (thread_current() != idle_thread ? 1 : 0);
   
   /* (59/60) * load_avg */
   fixed_point fraction_59_60 = int_to_fixed(59) / 60;
@@ -99,6 +102,7 @@ calculate_load_avg (void)
 static void
 calculate_recent_cpu (struct thread *t)
 {
+  /* We don't need to calculate priority/recent_cpu for idle thread. */
   if (t == idle_thread) return;
 
   /* Coefficient C = (2*load_avg)/(2*load_avg + 1) */
@@ -117,6 +121,7 @@ calculate_recent_cpu (struct thread *t)
 static void
 calculate_priority (struct thread *t)
 {
+  /* We don't need to calculate priority/recent_cpu for idle thread. */
   if (t == idle_thread) return;
 
   /* Term 1: recent_cpu / 4 */
@@ -210,6 +215,19 @@ thread_tick (void)
 {
   struct thread *t = thread_current ();
 
+  /* We calculate load_avg before recent_cpu/priority every second. */
+  if(timer_ticks() % TIMER_FREQ == 0)
+    calculate_load_avg();
+  /* We calculate recent_cpu then priority*/
+  if(t != idle_thread)
+    t->recent_cpu++;
+  /* We use thread_ticks as recent cpu is thread-specific. */
+  if(thread_ticks % TIMER_FREQ == 0)
+    calculate_recent_cpu (t);
+  /* Now we calculate priority. */
+  if(thread_ticks % PRIORITY_FREQ == 0)
+    calculate_priority (t);
+  
   /* Update statistics. */
   if (t == idle_thread)
     idle_ticks++;
