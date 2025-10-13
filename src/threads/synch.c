@@ -257,6 +257,18 @@ struct semaphore_elem
     struct semaphore semaphore;         /* This semaphore. */
   };
 
+/* list_less_func that is used to insert threads
+ * into lists in the order of decreasing priority */
+static bool sort_semaphore_elems_by_priority (const struct list_elem *a_,
+                                       const struct list_elem *b_,
+                                       void *aux UNUSED) {
+  struct semaphore_elem *a_sema = list_entry(a_, struct semaphore_elem, elem);
+  struct semaphore_elem *b_sema = list_entry(b_, struct semaphore_elem, elem);
+  struct list_elem *a_thread  = list_begin(&a_sema->semaphore.waiters);
+  struct list_elem *b_thread  = list_begin(&b_sema->semaphore.waiters);
+  return sort_threads_by_effective_priority(a_thread, b_thread, NULL);
+}
+
 /* Initializes condition variable COND.  A condition variable
    allows one piece of code to signal a condition and cooperating
    code to receive the signal and act upon it. */
@@ -299,7 +311,10 @@ cond_wait (struct condition *cond, struct lock *lock)
   ASSERT (lock_held_by_current_thread (lock));
   
   sema_init (&waiter.semaphore, 0);
-  list_push_back (&cond->waiters, &waiter.elem);
+  list_insert_ordered(&cond->waiters,
+                      &waiter.elem,
+                      sort_semaphore_elems_by_priority,
+                      NULL);
   lock_release (lock);
   sema_down (&waiter.semaphore);
   lock_acquire (lock);
