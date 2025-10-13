@@ -85,8 +85,9 @@ static void
 calculate_load_avg (void)
 {
   /* ready_threads: running thread + ready_list size. Excludes idle thread. */
-  int ready_threads = threads_ready + (thread_current() != idle_thread ? 1 : 0);
-  
+  int32_t ready_threads = (int32_t) threads_ready + 
+    (thread_current() != idle_thread ? 1 : 0);
+
   /* (59/60) * load_avg */
   fixed_point fraction_59_60 = int_to_fixed(59) / 60;
   fixed_point term1 = mulf(fraction_59_60, load_avg);
@@ -128,11 +129,11 @@ calculate_priority (struct thread *t)
   fixed_point term1 = t->recent_cpu / 4;
 
   /* Term 2: nice * 2 */
-  int term2 = t->nice * 2;
+  int32_t term2 = t->nice * 2;
 
   /* PRI_MAX - Term 1 - Term 2 */
   fixed_point new_priority_fp = int_to_fixed(PRI_MAX) - subf(term1, term2);
-  int new_priority = fixed_to_int_nearest(new_priority_fp);
+  int32_t new_priority = fixed_to_int_nearest(new_priority_fp);
 
   /* Priority is clamped to [PRI_MIN, PRI_MAX]*/
   if (new_priority < PRI_MIN)
@@ -140,7 +141,7 @@ calculate_priority (struct thread *t)
   else if (new_priority > PRI_MAX)
     new_priority = PRI_MAX;
 
-  ASSERT(PRI_MIN <= new_priority <= PRI_MAX);
+  ASSERT((PRI_MIN <= new_priority) && (new_priority <= PRI_MAX));
 
   t->priority = new_priority;
 }
@@ -171,10 +172,7 @@ threading_init (void)
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
-  /* Niceness and recent_cpu is set to 0 for any thread without parent,
-     which happens to be the inital thread. */
-  initial_thread->nice = 0;
-  initial_thread->recent_cpu = 0;
+
   thread_init (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
@@ -278,12 +276,6 @@ thread_create (const char *name, int priority,
   enum intr_level old_level;
 
   ASSERT (function != NULL);
-
-  /* Every thread created by thread_create has a parent, and a threads'
-     niceness and recent_cpu is inherited from its parent if it has one. */
-  struct thread * parent = thread_current ();
-  t->nice = parent->nice;
-  t->recent_cpu = parent->recent_cpu;
 
   /* Allocate thread. */
   t = palloc_get_page (PAL_ZERO);
@@ -581,6 +573,19 @@ thread_init (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
+  if(t == initial_thread) {
+    /* Niceness and recent_cpu is 0 if no parent thread is present */
+    t->nice = 0;
+    t->recent_cpu = 0;
+  }
+  else { 
+    /* Niceness and recent_cpu is inherited from its parent if it has one. */
+    struct thread * parent = thread_current ();
+    ASSERT(parent != NULL);
+    t->nice = parent->nice;
+    t->recent_cpu = parent->recent_cpu;
+  }
+    
 #ifdef USERPROG
   t->process = NULL;
 #endif   
