@@ -136,7 +136,7 @@ calculate_priority (struct thread *t)
     new_priority = PRI_MAX;
 
   ASSERT(PRI_MIN <= new_priority <= PRI_MAX);
-  
+
   t->priority = new_priority;
 }
 
@@ -166,6 +166,10 @@ threading_init (void)
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
+  /* Niceness and recent_cpu is set to 0 for any thread without parent,
+     which happens to be the inital thread. */
+  initial_thread->nice = 0;
+  initial_thread->recent_cpu = 0;
   thread_init (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
@@ -256,6 +260,12 @@ thread_create (const char *name, int priority,
   enum intr_level old_level;
 
   ASSERT (function != NULL);
+
+  /* Every thread created by thread_create has a parent, and a threads'
+     niceness and recent_cpu is inherited from its parent if it has one. */
+  struct thread * parent = thread_current ();
+  t->nice = parent->nice;
+  t->recent_cpu = parent->recent_cpu;
 
   /* Allocate thread. */
   t = palloc_get_page (PAL_ZERO);
