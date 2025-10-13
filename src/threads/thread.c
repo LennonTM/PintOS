@@ -4,6 +4,7 @@
 #include <random.h>
 #include <stdio.h>
 #include <string.h>
+#include "list.h"
 #include "threads/flags.h"
 #include "threads/interrupt.h"
 #include "threads/intr-stubs.h"
@@ -16,6 +17,8 @@
    Used to detect stack overflow.  See the big comment at the top
    of thread.h for details. */
 #define THREAD_MAGIC 0xcd6abf4b
+
+#define max(x, y) ((x) > (y) ? (x) : (y))
 
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
@@ -390,6 +393,53 @@ thread_set_priority (int new_priority)
     curr_thread->effective_priority = new_priority;
   }
   yield_if_lower_priority();
+}
+
+/* Propagate priority donation from a lock
+ * Afterwards, the caller must ensure to check if one
+ * of the thread's on the ready list
+ * has higher priority than the running thread */
+void update_priority_donation(struct lock *lock) {
+  ASSERT (intr_get_level() == INTR_OFF);
+  ASSERT (lock != NULL);
+  ASSERT (lock->holder != NULL);
+
+  struct thread *holder = lock->holder;
+
+  int prev_effective_priority = holder->effective_priority;
+  struct thread *top_thread = 
+    list_entry(list_front(&lock->semaphore.waiters), struct thread, elem);
+
+  int lock_priority = top_thread->effective_priority;
+  holder->effective_priority = max(holder->priority, lock_priority);
+  if (holder->effective_priority != prev_effective_priority) {
+    /* Remove thread from its current list
+     * which is either ready list or blocking lock's waiters */
+    list_remove(&holder->elem);
+    struct list *holder_list;
+    bool holder_is_blocked = holder->blocking_lock == NULL;
+    if (holder_is_blocked) {
+      /* Thread is in the ready list */
+      ASSERT (holder->status == THREAD_READY);
+      holder_list = &ready_list;
+    }
+    else {
+      /* Thread is in a blocking lock's waiters */
+      ASSERT (holder->status == THREAD_BLOCKED);
+      holder_list = &holder->blocking_lock->semaphore.waiters;
+    }
+    /* Reinsert to maintain priority order */
+    list_insert_ordered(holder_list,
+                        &holder->elem,
+                        sort_threads_by_effective_priority,
+                        NULL);
+    if (holder_is_blocked) {
+      /* propagate priority change on the
+       * blocking_lock of the lock holder */
+      update_priority_donation(lock->holder->blocking_lock);
+    }
+  }
+  /* no more donations */
 }
 
 /* Returns the current thread's priority. */

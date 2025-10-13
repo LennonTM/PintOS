@@ -72,6 +72,9 @@ sema_down (struct semaphore *sema)
                           &thread_current ()->elem,
                           sort_threads_by_effective_priority,
                           NULL);
+      if (thread_current()->blocking_lock != NULL) {
+        update_priority_donation(thread_current()->blocking_lock);
+      }
       thread_block ();
     }
   sema->value--;
@@ -199,8 +202,11 @@ lock_acquire (struct lock *lock)
   ASSERT (lock != NULL);
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
-
+  
+  thread_current()->blocking_lock = lock;
   sema_down (&lock->semaphore);
+  thread_current()->blocking_lock = NULL;
+
   lock->holder = thread_current ();
 }
 
