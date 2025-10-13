@@ -98,6 +98,8 @@ struct thread
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
+    struct lock *blocking_lock;
+
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     struct process *process;            /* Pointer to process running this thread. */
@@ -146,5 +148,6 @@ int thread_get_load_avg (void);
 
 list_less_func sort_threads_by_effective_priority;
 void yield_if_lower_priority(void);
+void update_priority_donation(struct lock*);
 
 #endif /* threads/thread.h */
