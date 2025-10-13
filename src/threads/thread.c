@@ -82,15 +82,14 @@ static void
 calculate_load_avg (void)
 {
   /* ready_threads: running thread + ready_list size. Excludes idle thread. */
-  int ready_threads = threads_ready + (thread_current() != idle_thread ? 1 : 0);
+  int ready_threads = threads_ready;
   
   /* (59/60) * load_avg */
   fixed_point fraction_59_60 = int_to_fixed(59) / 60;
-  fixed_point term1 = mulf(fraction_59_60, term1);
+  fixed_point term1 = mulf(fraction_59_60, load_avg);
 
   /* (1/60) * ready_threads */
-  fixed_point fraction_1_60 = int_to_fixed(1) / 60;
-  fixed_point term2 = fraction_1_60 * ready_threads;
+  fixed_point term2 = int_to_fixed(ready_threads) / 60;
 
   load_avg = term1 + term2;
 }
@@ -103,12 +102,13 @@ calculate_recent_cpu (struct thread *t)
   if (t == idle_thread) return;
 
   /* Coefficient C = (2*load_avg)/(2*load_avg + 1) */
-  fixed_point numerator = 2 * load_avg;
-  fixed_point denominator = addf((2*load_avg), 1);
-  fixed_point coefficient = divf(numerator, denominator);
+  fixed_point double_load_avg = 2 * load_avg;
+  fixed_point denominator = addf(double_load_avg, 1);
+  fixed_point coefficient = divf(double_load_avg, denominator);
 
+  /* We calculate coefficient first to avoid overflow. */
   /* recent_cpu = C * recent_cpu + nice */
-  fixed_point new_recent_cpu = mulf(coefficient, t->recent_cpu) + t->nice;
+  fixed_point new_recent_cpu = addf(mulf(coefficient, t->recent_cpu), t->nice);
   t->recent_cpu = new_recent_cpu;
 }
 
@@ -126,8 +126,17 @@ calculate_priority (struct thread *t)
   int term2 = t->nice * 2;
 
   /* PRI_MAX - Term 1 - Term 2 */
-  fixed_point new_priority_fp = int_to_fixed(PRI_MAX) - term1 - term2;
+  fixed_point new_priority_fp = int_to_fixed(PRI_MAX) - subf(term1, term2);
   int new_priority = fixed_to_int_nearest(new_priority_fp);
+
+  /* Priority is clamped to [PRI_MIN, PRI_MAX]*/
+  if (new_priority < PRI_MIN)
+    new_priority = PRI_MIN;
+  else if (new_priority > PRI_MAX)
+    new_priority = PRI_MAX;
+
+  ASSERT(PRI_MIN <= new_priority <= PRI_MAX);
+  
   t->priority = new_priority;
 }
 
