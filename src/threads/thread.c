@@ -381,15 +381,15 @@ thread_set_priority (int new_priority)
 {
   struct thread *curr_thread = thread_current ();
   curr_thread->priority = new_priority;
-  if (new_priority > curr_thread->effective_priority) 
-    {
-      curr_thread->effective_priority = new_priority;
-    }
-  // ********** TO DO ********** 
-  // If priority decreases, a comparison with
-  // list_begin(curr_thread->locks) to grab the lock
-  // list_begin(lock->semaphore->waiters) to grab another thread
-  // grab that effective priority for next highest donor                             
+  if (new_priority > curr_thread->effective_priority) {
+    curr_thread->effective_priority = new_priority;
+  }
+  else {
+    // compare highest of the donors to new base
+    // for now now effective_priority = base_priority
+    curr_thread->effective_priority = new_priority;
+  }
+  yield_if_lower_priority();
 }
 
 /* Returns the current thread's priority. */
