@@ -395,51 +395,88 @@ thread_set_priority (int new_priority)
   yield_if_lower_priority();
 }
 
-/* Propagate priority donation from a lock
- * Afterwards, the caller must ensure to check if one
- * of the thread's on the ready list
- * has higher priority than the running thread */
-void update_priority_donation(struct lock *lock) {
+/* Updates a lock's priority,
+   Call this when a change has been made to the list of waiters
+   also mutually recursive with update_thread_priority */
+void update_lock_priority(struct lock* lock) {
   ASSERT (intr_get_level() == INTR_OFF);
   ASSERT (lock != NULL);
-  ASSERT (lock->holder != NULL);
 
-  struct thread *holder = lock->holder;
-
-  int prev_effective_priority = holder->effective_priority;
-  struct thread *top_thread = 
-    list_entry(list_front(&lock->semaphore.waiters), struct thread, elem);
-
-  int lock_priority = top_thread->effective_priority;
-  holder->effective_priority = max(holder->priority, lock_priority);
-  if (holder->effective_priority != prev_effective_priority) {
-    /* Remove thread from its current list
-     * which is either ready list or blocking lock's waiters */
-    list_remove(&holder->elem);
-    struct list *holder_list;
-    bool holder_is_blocked = holder->blocking_lock == NULL;
-    if (holder_is_blocked) {
-      /* Thread is in the ready list */
-      ASSERT (holder->status == THREAD_READY);
-      holder_list = &ready_list;
-    }
-    else {
-      /* Thread is in a blocking lock's waiters */
-      ASSERT (holder->status == THREAD_BLOCKED);
-      holder_list = &holder->blocking_lock->semaphore.waiters;
-    }
-    /* Reinsert to maintain priority order */
-    list_insert_ordered(holder_list,
-                        &holder->elem,
-                        sort_threads_by_effective_priority,
+  /* find the lock's index 0 waiter */
+  int old_priority = lock->priority;
+  lock->priority = PRI_MIN;
+  if (!list_empty(&lock->waiters)) {
+    /* lock priority is the maximum of waiters priorities */
+    lock->priority = list_entry(list_front(&lock->waiters),
+                                struct thread,
+                                elem)->effective_priority;
+  }
+  if (lock->priority != old_priority && lock->holder != NULL) {
+    /* Lock priority has changed, propagate this */
+    /* Remove and reinsert to maintain priority order */
+    list_remove(&lock->elem);
+    list_insert_ordered(&lock->holder->locks,
+                        &lock->elem,
+                        sort_locks_by_priority,
                         NULL);
-    if (holder_is_blocked) {
-      /* propagate priority change on the
-       * blocking_lock of the lock holder */
-      update_priority_donation(lock->holder->blocking_lock);
+    update_thread_priority(lock->holder);
+  }
+}
+
+/* Updates a thread's priority,
+   Call this when a change has been made to
+    - a thread's base priority 
+    - list of held locks
+   also mutually recursive with update_lock_priority */
+void update_thread_priority(struct thread* thread) {
+  ASSERT (intr_get_level() == INTR_OFF);
+  ASSERT (thread != NULL);
+  /* Invariant: thread locks list must be sorted */
+
+  /* track old_priority for detecting any changes */
+  int old_priority = thread->effective_priority;
+
+  /* effective_priority = 
+   *          max(priority, held locks) */
+  thread->effective_priority = thread->priority;
+  if (!list_empty(&thread->locks)) {
+    int locks_priority = list_entry(list_front(&thread->locks),
+                                    struct lock,
+                                    elem)->priority;
+    if (locks_priority > thread->priority) {
+      thread->effective_priority = locks_priority;
     }
   }
-  /* no more donations */
+
+  if (thread->status == THREAD_RUNNING) {
+    /* No lists need updating */
+    return;
+  }
+
+  /* Check if priority has changed, if so propagate this */
+  if (old_priority != thread->effective_priority) {
+    /* Remove and reinsert to maintain priority order */
+    list_remove(&thread->elem);
+    if (thread->status == THREAD_READY) {
+      /* Propagate to ready_list */
+      ASSERT(thread->status == THREAD_READY);
+      list_insert_ordered(&ready_list,
+                          &thread->elem,
+                          sort_threads_by_effective_priority,
+                          NULL);
+      /* Check for yield outside of function */
+    } else if (thread->blocking_lock == NULL) {
+      /* Semaphore wait list */
+      /* We need to remove and reinsert into semaphore */
+    } else {
+      /* Propagate to lock_list */
+      list_insert_ordered(&thread->blocking_lock->waiters,
+                          &thread->elem,
+                          sort_threads_by_effective_priority,
+                          NULL);
+      update_lock_priority(thread->blocking_lock);
+    }
+  }
 }
 
 /* Returns the current thread's priority. */

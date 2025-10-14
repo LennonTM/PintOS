@@ -101,8 +101,8 @@ struct thread
     /* Lock that this thread is waiting to be released
      * if the thread is not blocked, blocking_lock == NULL */
     struct lock *blocking_lock;
-
-    /* List of currently held locks */
+    
+    /* List of currently held locks, sorted by priority */
     struct list locks;
 
 #ifdef USERPROG
@@ -152,7 +152,9 @@ int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
 list_less_func sort_threads_by_effective_priority;
+list_less_func sort_locks_by_priority;
 void yield_if_lower_priority(void);
-void update_priority_donation(struct lock*);
+void update_lock_priority(struct lock*);
+void update_thread_priority(struct thread*);
 
 #endif /* threads/thread.h */
