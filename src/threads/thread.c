@@ -63,6 +63,8 @@ bool thread_mlfqs;
 fixed_point load_avg;
 /* How many ticks it takes for a thread to recalculate priority. */
 #define PRIORITY_FREQ 4
+/* Contains a list of threads which should have priorities updated. */
+struct list threads_to_update;
 
 static void kernel_thread (thread_func *, void *aux);
 
@@ -101,7 +103,7 @@ calculate_load_avg (void)
 /* Calculates the recent_cpu of thread t 
    Formula: recent_cpu = (2*load_avg)/(2*load_avg + 1) * recent_cpu + nice */
 static void
-calculate_recent_cpu (struct thread *t)
+calculate_recent_cpu (struct thread *t, void *aux UNUSED)
 {
   /* We don't need to calculate priority/recent_cpu for idle thread. */
   if (t == idle_thread) return;
@@ -120,7 +122,7 @@ calculate_recent_cpu (struct thread *t)
 /* Calculates the priority of a thread t based on recent_cpu and nice.
    Formula: priority = PRI_MAX - (recent_cpu / 4) - (nice * 2) */
 static void
-calculate_priority (struct thread *t)
+calculate_priority (struct thread *t, void *aux UNUSED)
 {
   /* We don't need to calculate priority/recent_cpu for idle thread. */
   if (t == idle_thread) return;
@@ -167,6 +169,7 @@ threading_init (void)
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
+  list_init (&threads_to_update);
 
   load_avg = 0;
 
@@ -206,6 +209,14 @@ threads_ready (void)
   return ready_thread_count;
 }
 
+static void
+add_to_update_list(struct thread * t) {
+  if (t->should_update == false) {
+    t->should_update = true;
+    list_push_back(&threads_to_update, &t->updelem);
+  }
+}
+
 /* Called by the timer interrupt handler at each timer tick.
    Thus, this function runs in an external interrupt context. */
 void
@@ -213,19 +224,34 @@ thread_tick (void)
 {
   struct thread *t = thread_current ();
 
-  /* We calculate load_avg before recent_cpu/priority every second. */
-  if(timer_ticks() % TIMER_FREQ == 0)
+  /* We update load_avg then recent_cpu then priority for all threads
+     every second. */
+  if(timer_ticks() % TIMER_FREQ == 0){
     calculate_load_avg();
-  /* We calculate recent_cpu then priority*/
-  if(t != idle_thread)
+    thread_foreach(&calculate_recent_cpu, NULL);
+    thread_foreach(&calculate_priority, NULL);
+  }
+  else if(t != idle_thread) {
+    /* We only change priority for the */
     t->recent_cpu++;
-  /* We use thread_ticks as recent cpu is thread-specific. */
-  if(thread_ticks % TIMER_FREQ == 0)
-    calculate_recent_cpu (t);
-  /* Now we calculate priority. */
-  if(thread_ticks % PRIORITY_FREQ == 0)
-    calculate_priority (t);
-  
+    /* We add t to update list as priority may have changed. */
+    add_to_update_list(t);
+    if(timer_ticks() % PRIORITY_FREQ == 0) {
+      /* We iterate through the list removing as we traverse. */
+      for (
+        struct list_elem *e = list_begin (&threads_to_update); 
+        e != list_end (&threads_to_update); 
+        e = list_remove (e)) {
+        struct thread *t = list_entry (e, struct thread, updelem);
+        /* We calculate the recent_cpu/priority of each thread needing update.*/
+        calculate_recent_cpu (t, NULL);
+        calculate_priority (t, NULL);
+        /* t has already been updated, dont update anymore. */
+        t->should_update = false;
+      }
+    }
+  }
+
   /* Update statistics. */
   if (t == idle_thread)
     idle_ticks++;
@@ -455,7 +481,10 @@ thread_get_priority (void)
 void
 thread_set_nice (int nice) 
 {
-  thread_current ()->nice = nice;
+  struct thread * t = thread_current ();
+  t->nice = nice;
+  /* A change in thread niceness can change priority, hence the update. */
+  add_to_update_list (t);
 }
 
 /* Returns the current thread's nice value. */
@@ -573,6 +602,7 @@ thread_init (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
+  t->should_update = false;
   if(t == initial_thread) {
     /* Niceness and recent_cpu is 0 if no parent thread is present */
     t->nice = 0;
