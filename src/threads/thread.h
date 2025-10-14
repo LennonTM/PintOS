@@ -97,7 +97,9 @@ struct thread
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
-
+    
+    /* Lock that this thread is waiting to be released
+     * if the thread is not blocked, blocking_lock == NULL */
     struct lock *blocking_lock;
 
 #ifdef USERPROG
