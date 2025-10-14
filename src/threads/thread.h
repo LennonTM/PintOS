@@ -97,7 +97,7 @@ struct thread
     struct list_elem allelem;           /* List element for all threads list. */
     fixed_point recent_cpu;             /* Measure of received cpu time. */
     int32_t nice;                       /* Threads willingness to yield*/
-
+    struct list_elem updelem;           /* List element for threads_to_update.*/
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
