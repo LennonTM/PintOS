@@ -72,9 +72,6 @@ sema_down (struct semaphore *sema)
                           &thread_current ()->elem,
                           sort_threads_by_effective_priority,
                           NULL);
-      if (thread_current()->blocking_lock != NULL) {
-        update_priority_donation(thread_current()->blocking_lock);
-      }
       thread_block ();
     }
   sema->value--;
