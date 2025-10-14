@@ -102,6 +102,9 @@ struct thread
      * if the thread is not blocked, blocking_lock == NULL */
     struct lock *blocking_lock;
 
+    /* List of currently held locks */
+    struct list locks;
+
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     struct process *process;            /* Pointer to process running this thread. */
