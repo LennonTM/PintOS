@@ -253,6 +253,17 @@ lock_held_by_current_thread (const struct lock *lock)
   return lock->holder == thread_current ();
 }
 
+bool sort_locks_by_priority(const struct list_elem *a_,
+                             const struct list_elem *b_,
+                             void *aux UNUSED) {
+  struct lock *a = list_entry(a_, struct lock, elem);
+  struct lock *b = list_entry(b_, struct lock, elem);
+  /* Use >= for comparison since it allows for
+   * smaller number of comparisons in the case of
+   * many locks with the same priority */
+  return a->priority >= b->priority;
+}
+
 /* One semaphore in a list. */
 struct semaphore_elem 
   {
