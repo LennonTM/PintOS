@@ -182,7 +182,8 @@ lock_init (struct lock *lock)
   ASSERT (lock != NULL);
 
   lock->holder = NULL;
-  sema_init (&lock->semaphore, 1);
+  list_init(&lock->waiters);
+  lock->priority = PRI_MIN;
 }
 
 /* Acquires LOCK, sleeping until it becomes available if
@@ -200,11 +201,26 @@ lock_acquire (struct lock *lock)
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
   
-  thread_current()->blocking_lock = lock;
-  sema_down (&lock->semaphore);
-  thread_current()->blocking_lock = NULL;
+  enum intr_level old_level = intr_disable();
 
-  lock->holder = thread_current ();
+  while (lock->holder != NULL) 
+    {
+      list_insert_ordered(&lock->waiters,
+                          &thread_current ()->elem,
+                          sort_threads_by_effective_priority,
+                          NULL);
+      thread_current()->blocking_lock = lock;
+      update_lock_priority(lock);
+      thread_block ();
+    }
+  lock->holder = thread_current();
+  thread_current()->blocking_lock = NULL;
+  list_insert_ordered(&thread_current()->locks,
+                      &lock->elem,
+                      sort_locks_by_priority,
+                      NULL);
+
+  intr_set_level (old_level);
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -217,13 +233,21 @@ bool
 lock_try_acquire (struct lock *lock)
 {
   bool success;
+  enum intr_level old_level;
 
   ASSERT (lock != NULL);
   ASSERT (!lock_held_by_current_thread (lock));
 
-  success = sema_try_down (&lock->semaphore);
-  if (success)
-    lock->holder = thread_current ();
+  old_level = intr_disable ();
+  if (lock->holder == NULL) 
+    {
+      lock->holder = thread_current ();
+      success = true; 
+    }
+  else
+    success = false;
+
+  intr_set_level (old_level);
   return success;
 }
 
@@ -238,8 +262,19 @@ lock_release (struct lock *lock)
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
 
+  enum intr_level old_level = intr_disable ();
+
+  if (!list_empty (&lock->waiters)) 
+    thread_unblock (list_entry (list_pop_front (&lock->waiters),
+                                struct thread, elem));
+
   lock->holder = NULL;
-  sema_up (&lock->semaphore);
+  list_remove(&lock->elem);
+  update_thread_priority(thread_current());
+  intr_set_level (old_level);
+
+  /* Priority of the holder thread may have decreased */
+  yield_if_lower_priority();
 }
 
 /* Returns true if the current thread holds LOCK, false
