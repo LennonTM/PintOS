@@ -630,6 +630,10 @@ thread_init (struct thread *t, const char *name, int priority)
 #endif   
   t->magic = THREAD_MAGIC;
 
+  t->blocking_lock = NULL;
+  t->waitlist = NULL;
+  list_init(&t->locks);
+
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
   intr_set_level (old_level);
