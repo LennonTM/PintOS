@@ -454,26 +454,15 @@ void update_thread_priority(struct thread* thread) {
   }
 
   /* Check if priority has changed, if so propagate this */
-  if (old_priority != thread->effective_priority) {
+  if (old_priority != thread->effective_priority && thread->waitlist != NULL) {
     /* Remove and reinsert to maintain priority order */
     list_remove(&thread->elem);
-    if (thread->status == THREAD_READY) {
-      /* Propagate to ready_list */
-      ASSERT(thread->status == THREAD_READY);
-      list_insert_ordered(&ready_list,
-                          &thread->elem,
-                          sort_threads_by_effective_priority,
-                          NULL);
-      /* Check for yield outside of function */
-    } else if (thread->blocking_lock == NULL) {
-      /* Semaphore wait list */
-      /* We need to remove and reinsert into semaphore */
-    } else {
-      /* Propagate to lock_list */
-      list_insert_ordered(&thread->blocking_lock->waiters,
-                          &thread->elem,
-                          sort_threads_by_effective_priority,
-                          NULL);
+    list_insert_ordered(thread->waitlist,
+                        &thread->elem,
+                        sort_threads_by_effective_priority,
+                        NULL);
+    if (thread->blocking_lock != NULL) {
+      /* Propagate the change to blocking_lock */
       update_lock_priority(thread->blocking_lock);
     }
   }
