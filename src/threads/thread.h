@@ -98,12 +98,13 @@ struct thread
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
     
-    /* Lock that this thread is waiting to be released
-     * if the thread is not blocked, blocking_lock == NULL */
-    struct lock *blocking_lock;
-    
-    /* List of currently held locks, sorted by priority */
-    struct list locks;
+    /* Data that allows to accurately propagate priority donation */
+    struct lock *blocking_lock; /* Lock that a thread is for to be released
+                                 * NULL if not blocked */
+    struct list *waitlist;      /* Wait list that the thread participates in
+                                 * can be ready_list or one of the
+                                 * synchronisation primitive's waiters */
+    struct list locks; /* List of currently held locks, sorted by priority */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
