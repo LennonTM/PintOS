@@ -72,8 +72,10 @@ sema_down (struct semaphore *sema)
                           &thread_current ()->elem,
                           sort_threads_by_effective_priority,
                           NULL);
+      thread_current()->waitlist = &sema->waiters;
       thread_block ();
     }
+  thread_current()->waitlist = NULL;
   sema->value--;
   intr_set_level (old_level);
 }
@@ -210,11 +212,14 @@ lock_acquire (struct lock *lock)
                           sort_threads_by_effective_priority,
                           NULL);
       thread_current()->blocking_lock = lock;
+      thread_current()->waitlist = &lock->waiters;
       update_lock_priority(lock);
       thread_block ();
     }
   lock->holder = thread_current();
+  /* The thread is no longer blocked */
   thread_current()->blocking_lock = NULL;
+  thread_current()->waitlist = NULL;
   list_insert_ordered(&thread_current()->locks,
                       &lock->elem,
                       sort_locks_by_priority,
