@@ -378,20 +378,17 @@ thread_foreach (thread_action_func *func, void *aux)
     }
 }
 
-/* Sets the current thread's priority to NEW_PRIORITY. */
+/* Sets the current thread's base priority to NEW_PRIORITY. */
 void
 thread_set_priority (int new_priority) 
 {
   struct thread *curr_thread = thread_current ();
   curr_thread->priority = new_priority;
-  if (new_priority > curr_thread->effective_priority) {
-    curr_thread->effective_priority = new_priority;
-  }
-  else {
-    // compare highest of the donors to new base
-    // for now now effective_priority = base_priority
-    curr_thread->effective_priority = new_priority;
-  }
+
+  enum intr_level old_level = intr_disable();
+  update_thread_priority(thread_current());
+  intr_set_level(old_level);
+
   yield_if_lower_priority();
 }
 
