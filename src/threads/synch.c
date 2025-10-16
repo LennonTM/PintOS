@@ -275,6 +275,9 @@ lock_release (struct lock *lock)
 
   lock->holder = NULL;
   list_remove(&lock->elem);
+  /* A waiter got removed, so lock->priority is outdated */
+  update_lock_priority(lock);
+  /* Thread released a lock, so its priority might drop */
   update_thread_priority(thread_current());
   intr_set_level (old_level);
 
