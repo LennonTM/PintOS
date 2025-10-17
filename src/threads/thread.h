@@ -94,6 +94,7 @@ struct thread
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
+    int effective_priority;             /* Effective priority */
     struct list_elem allelem;           /* List element for all threads list. */
     fixed_point recent_cpu;             /* Measure of received cpu time. */
     int32_t nice;                       /* Threads willingness to yield*/
@@ -148,5 +149,8 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+
+list_less_func sort_threads_by_effective_priority;
+void yield_if_lower_priority(void);
 
 #endif /* threads/thread.h */

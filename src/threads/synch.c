@@ -68,7 +68,10 @@ sema_down (struct semaphore *sema)
   old_level = intr_disable ();
   while (sema->value == 0) 
     {
-      list_push_back (&sema->waiters, &thread_current ()->elem);
+      list_insert_ordered(&sema->waiters,
+                          &thread_current ()->elem,
+                          sort_threads_by_effective_priority,
+                          NULL);
       thread_block ();
     }
   sema->value--;
@@ -118,6 +121,7 @@ sema_up (struct semaphore *sema)
                                 struct thread, elem));
   sema->value++;
   intr_set_level (old_level);
+  yield_if_lower_priority();
 }
 
 static void sema_test_helper (void *sema_);
@@ -251,7 +255,21 @@ struct semaphore_elem
   {
     struct list_elem elem;              /* List element. */
     struct semaphore semaphore;         /* This semaphore. */
+    struct thread* waiting_thread;      /* A thread that is waiting
+                                           for cond_signal */
   };
+
+/* list_less_func that is used to insert threads
+ * into lists in the order of decreasing priority */
+static bool sort_semaphore_elems_by_priority (const struct list_elem *a_,
+                                       const struct list_elem *b_,
+                                       void *aux UNUSED) {
+  struct semaphore_elem *a_sema = list_entry(a_, struct semaphore_elem, elem);
+  struct semaphore_elem *b_sema = list_entry(b_, struct semaphore_elem, elem);
+  struct thread *a_thread  = a_sema->waiting_thread;
+  struct thread *b_thread  = b_sema->waiting_thread;
+  return a_thread->effective_priority > b_thread->effective_priority;
+}
 
 /* Initializes condition variable COND.  A condition variable
    allows one piece of code to signal a condition and cooperating
@@ -295,7 +313,16 @@ cond_wait (struct condition *cond, struct lock *lock)
   ASSERT (lock_held_by_current_thread (lock));
   
   sema_init (&waiter.semaphore, 0);
-  list_push_back (&cond->waiters, &waiter.elem);
+  waiter.waiting_thread = thread_current();
+  /* inserting is synchronised with other thread
+   * using the same condition and lock
+   * however, some thread on the waitlist
+   * can get priority donated, which
+   * will move it in the list */
+  list_insert_ordered(&cond->waiters,
+                      &waiter.elem,
+                      sort_semaphore_elems_by_priority,
+                      NULL);
   lock_release (lock);
   sema_down (&waiter.semaphore);
   lock_acquire (lock);
