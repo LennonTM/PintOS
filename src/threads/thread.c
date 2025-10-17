@@ -228,7 +228,7 @@ add_to_update_list(struct thread * t) {
 }
 
 static void
-update_mlfqs_priorities()
+update_mlfqs_priorities(void)
 {
   struct thread *t = thread_current ();
 
