@@ -23,9 +23,16 @@
 
 #define max(x, y) ((x) > (y) ? (x) : (y))
 
-/* List of processes in THREAD_READY state, that is, processes
-   that are ready to run but not actually running. */
-static struct list ready_list;
+/* Is an array containing 64 lists of threads for each priority. Each
+   thread stored is in THREAD_READY state, that is, threads
+   that are ready to run but not actually running. Index 63 for PRI_MAX etc  */
+static struct list ready_list[PRI_NUM];
+
+/* Each bit is a boolean for whether each index in ready_list has a 
+   non-empty list or not, used to determine next thread to run faster*/
+static uint64_t ready_list_mask;
+
+static size_t ready_list_size;
 
 /* List of all processes.  Processes are added to this list
    when they are first scheduled and removed when they exit. */
@@ -179,10 +186,14 @@ threading_init (void)
   ASSERT (intr_get_level () == INTR_OFF);
 
   lock_init (&tid_lock);
-  list_init (&ready_list);
   list_init (&all_list);
   list_init (&threads_to_update);
 
+  for (int i = 0; i< PRI_NUM; i++) {
+    list_init(&ready_list[i]);
+  }
+  ready_list_size = 0;
+  ready_list_mask = 0;
   load_avg = 0;
 
   /* Set up a thread structure for the running thread. */
@@ -215,10 +226,7 @@ threading_start (void)
 size_t
 threads_ready (void)
 {
-  enum intr_level old_level = intr_disable ();
-  size_t ready_thread_count = list_size (&ready_list);
-  intr_set_level (old_level);
-  return ready_thread_count;
+  return ready_list_size;
 }
 
 static void
@@ -393,18 +401,22 @@ thread_block (void)
   schedule ();
 }
 
+/* Gets the highest priority which has a non-empty queue in ready list*/
+static int
+get_highest_priority(void){
+  int leading_zeros = __builtin_clzll(ready_list_mask);
+  return PRI_MAX - leading_zeros;
+}
+
 void
 yield_if_lower_priority(void) {
   /* the highest priority ready thread */
   enum intr_level old_level = intr_disable();
-  if (list_empty(&ready_list)) {
+  if (threads_ready() == 0) {
     intr_set_level(old_level);
     return;
   }
-  struct thread* top_thread = list_entry(list_front(&ready_list),
-                                         struct thread, 
-                                         elem);
-  if (top_thread->effective_priority > thread_current()->effective_priority) {
+  if (get_highest_priority() > thread_current()->effective_priority) {
     if (intr_context()) {
       intr_yield_on_return();
     }
@@ -418,10 +430,14 @@ yield_if_lower_priority(void) {
 /* Adds a thread to the ready list, maintaining priority order */
 static void
 add_to_ready_list(struct thread *t) {
-  list_insert_ordered(&ready_list,
-                      &t->elem,
-                      sort_threads_by_effective_priority,
-                      NULL);
+  ASSERT(intr_get_level() == INTR_OFF);
+  int64_t priority = t->effective_priority;
+  ASSERT((PRI_MIN <= priority) && (priority <= PRI_MAX));
+  /* Set the priority bit in ready_list_mask to be 1 at index "priority" */
+  ready_list_mask |= 1 << priority;
+  /* Put the thread into the back of its corresponding "queue"*/
+  list_push_back(&ready_list[priority], &t->elem);
+  ready_list_size++;
 }
 
 /* Transitions a blocked thread T to the ready-to-run state.
@@ -442,7 +458,6 @@ thread_unblock (struct thread *t)
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
   add_to_ready_list(t);
-  t->waitlist = &ready_list;
   t->status = THREAD_READY;
   intr_set_level (old_level);
 }
@@ -510,7 +525,6 @@ thread_yield (void)
   old_level = intr_disable ();
   if (cur != idle_thread) {
     add_to_ready_list(cur);
-    cur->waitlist = &ready_list;
   }
   cur->status = THREAD_READY;
   schedule ();
@@ -818,10 +832,21 @@ alloc_frame (struct thread *t, size_t size)
   return t->stack;
 }
 
-/* Pops first thread from the first non-empty priority list in ready list*/
+/* Pops first thread from the highest priority non-empty queue in ready list*/
 static struct thread *
 ready_list_pop(void) {
-  return list_entry (list_pop_front (&ready_list), struct thread, elem);
+  ASSERT (intr_get_level() == INTR_OFF);
+  ASSERT (ready_list_size != 0);
+  ASSERT (ready_list_mask != 0);
+  int index = get_highest_priority();
+  struct thread* t =
+    list_entry (list_pop_front (&ready_list[index]), struct thread, elem);
+  /* If queue becomes empty remove corresponding bit in the ready list mask */
+  if (list_empty(&ready_list[index])) {
+    ready_list_mask &= ~(1 << index);
+  }
+  ready_list_size--;
+  return t;
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
@@ -832,7 +857,7 @@ ready_list_pop(void) {
 static struct thread *
 next_thread_to_run (void) 
 {
-  if (list_empty (&ready_list))
+  if (threads_ready() == 0)
     return idle_thread;
   else
     return ready_list_pop();
