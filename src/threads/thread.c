@@ -117,8 +117,7 @@ calculate_recent_cpu (struct thread *t, void *aux UNUSED)
 
   /* We calculate coefficient first to avoid overflow. */
   /* recent_cpu = C * recent_cpu + nice */
-  fixed_point new_recent_cpu = addf(mulf(coefficient, t->recent_cpu), t->nice);
-  t->recent_cpu = new_recent_cpu;
+  t->recent_cpu = addf(mulf(coefficient, t->recent_cpu), t->nice);
 }
 
 /* Calculates the priority of a thread t based on recent_cpu and nice.
@@ -138,7 +137,8 @@ calculate_priority (struct thread *t, void *aux UNUSED)
   int32_t term2 = t->nice * 2;
 
   /* PRI_MAX - Term 1 - Term 2 */
-  fixed_point new_priority_fp = int_to_fixed(PRI_MAX) - subf(term1, term2);
+  fixed_point new_priority_fp = 
+    int_to_fixed(PRI_MAX) - term1 - int_to_fixed(term2);
   int32_t new_priority = fixed_to_int_nearest(new_priority_fp);
 
   /* Priority is clamped to [PRI_MIN, PRI_MAX]*/
