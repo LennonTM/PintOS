@@ -153,6 +153,9 @@ calculate_priority (struct thread *t, void *aux UNUSED)
   ASSERT((PRI_MIN <= new_priority) && (new_priority <= PRI_MAX));
 
   t->priority = new_priority;
+  /* Updates the effective priority and alters the priority-based lists
+     accordingly. */
+  update_thread_priority(t);
 }
 
 /* Initializes the threading system by transforming the code
@@ -237,6 +240,9 @@ thread_tick (void)
     calculate_load_avg();
     thread_foreach(&calculate_recent_cpu, NULL);
     thread_foreach(&calculate_priority, NULL);
+    /* Thread priorities could have changed, so we should yield if the current
+       thread does not have highest priority.*/
+    yield_if_lower_priority();
   }
   else {
     /* When we are not doing the per second full calculations, we update
@@ -262,6 +268,9 @@ thread_tick (void)
         /* t has already been updated, dont update anymore. */
         t->should_update = false;
       }
+      /* Thread priorities could have changed, so we should yield if the current
+         thread does not have highest priority.*/
+      yield_if_lower_priority();
     }
   }
 
