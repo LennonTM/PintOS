@@ -224,7 +224,6 @@ lock_acquire (struct lock *lock)
   if (!thread_mlfqs) {
     /* The thread is no longer blocked */
     thread_current()->blocking_lock = NULL;
-    thread_current()->waitlist = NULL;
     list_insert_ordered(&thread_current()->locks,
                         &lock->elem,
                         sort_locks_by_priority,

@@ -434,6 +434,7 @@ thread_unblock (struct thread *t)
                       &t->elem,
                       sort_threads_by_effective_priority,
                       NULL);
+  t->waitlist = &ready_list;
   t->status = THREAD_READY;
   intr_set_level (old_level);
 }
@@ -499,11 +500,13 @@ thread_yield (void)
   ASSERT (!intr_context ());
 
   old_level = intr_disable ();
-  if (cur != idle_thread) 
+  if (cur != idle_thread) {
     list_insert_ordered(&ready_list,
                         &cur->elem,
                         sort_threads_by_effective_priority,
                         NULL);
+    cur->waitlist = &ready_list;
+  }
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -601,13 +604,13 @@ void update_thread_priority(struct thread* thread) {
     }
   }
 
-  if (thread->status == THREAD_RUNNING) {
-    /* No lists need updating */
+  /* Check if no lists need updating */
+  if (thread->status == THREAD_RUNNING)
     return;
-  }
 
   /* Check if priority has changed, if so propagate this */
-  if (old_priority != thread->effective_priority && thread->waitlist != NULL) {
+  if (old_priority != thread->effective_priority) {
+    ASSERT(thread->waitlist != NULL);
     /* Remove and reinsert to maintain priority order */
     list_remove(&thread->elem);
     list_insert_ordered(thread->waitlist,
