@@ -232,7 +232,7 @@ thread_tick (void)
     thread_foreach(&calculate_priority, NULL);
   }
   else if(t != idle_thread) {
-    /* We only change priority for the */
+    /* recent_cpu is incremented for running thread, which may change priority*/
     t->recent_cpu++;
     /* We add t to update list as priority may have changed. */
     add_to_update_list(t);
