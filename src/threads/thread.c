@@ -818,6 +818,12 @@ alloc_frame (struct thread *t, size_t size)
   return t->stack;
 }
 
+/* Pops first thread from the first non-empty priority list in ready list*/
+static struct thread *
+ready_list_pop(void) {
+  return list_entry (list_pop_front (&ready_list), struct thread, elem);
+}
+
 /* Chooses and returns the next thread to be scheduled.  Should
    return a thread from the run queue, unless the run queue is
    empty.  (If the running thread can continue running, then it
@@ -829,7 +835,7 @@ next_thread_to_run (void)
   if (list_empty (&ready_list))
     return idle_thread;
   else
-    return list_entry (list_pop_front (&ready_list), struct thread, elem);
+    return ready_list_pop();
 }
 
 /* Completes a thread switch by activating the new thread's page
