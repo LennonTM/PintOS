@@ -211,19 +211,24 @@ lock_acquire (struct lock *lock)
                           &thread_current ()->elem,
                           sort_threads_by_effective_priority,
                           NULL);
-      thread_current()->blocking_lock = lock;
-      thread_current()->waitlist = &lock->waiters;
-      update_lock_priority(lock);
+      /* Maintain blocking lock and waitlist for priority donation */
+      if (!thread_mlfqs) {
+        thread_current()->blocking_lock = lock;
+        thread_current()->waitlist = &lock->waiters;
+        update_lock_priority(lock);
+      }
       thread_block ();
     }
   lock->holder = thread_current();
-  /* The thread is no longer blocked */
-  thread_current()->blocking_lock = NULL;
-  thread_current()->waitlist = NULL;
-  list_insert_ordered(&thread_current()->locks,
-                      &lock->elem,
-                      sort_locks_by_priority,
-                      NULL);
+  /* Maintain blocking lock and waitlist for priority donation */
+  if (!thread_mlfqs) {
+    /* The thread is no longer blocked */
+    thread_current()->blocking_lock = NULL;
+    list_insert_ordered(&thread_current()->locks,
+                        &lock->elem,
+                        sort_locks_by_priority,
+                        NULL);
+  }
 
   intr_set_level (old_level);
 }
@@ -274,15 +279,19 @@ lock_release (struct lock *lock)
                                 struct thread, elem));
 
   lock->holder = NULL;
-  list_remove(&lock->elem);
-  /* A waiter got removed, so lock->priority is outdated */
-  update_lock_priority(lock);
-  /* Thread released a lock, so its priority might drop */
-  update_thread_priority(thread_current());
-  intr_set_level (old_level);
+  /* Update priority donation for not mlfq scheduler */
+  if (!thread_mlfqs) {
+    list_remove(&lock->elem);
+    /* A waiter got removed, so lock->priority is outdated */
+    update_lock_priority(lock);
+    /* Thread released a lock, so its priority might drop */
+    update_thread_priority(thread_current());
 
-  /* Priority of the holder thread may have decreased */
-  yield_if_lower_priority();
+    /* Priority of the holder thread may have decreased */
+    yield_if_lower_priority();
+  }
+
+  intr_set_level (old_level);
 }
 
 /* Returns true if the current thread holds LOCK, false
