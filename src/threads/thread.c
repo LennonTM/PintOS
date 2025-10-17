@@ -231,17 +231,23 @@ thread_tick (void)
     thread_foreach(&calculate_recent_cpu, NULL);
     thread_foreach(&calculate_priority, NULL);
   }
-  else if(t != idle_thread) {
-    /* recent_cpu is incremented for running thread, which may change priority*/
-    t->recent_cpu++;
-    /* We add t to update list as priority may have changed. */
-    add_to_update_list(t);
+  else {
+    /* When we are not doing the per second full calculations, we update
+       recent_cpu and add to update_list and/or calculate priority/recent_cpu
+       every 4 ticks */
+    if(t != idle_thread) {
+      /* recent_cpu is incremented for running thread, may change priority */
+      t->recent_cpu++;
+      /* We add t to update list as priority may have changed. */
+      add_to_update_list(t);
+    }
     if(timer_ticks() % PRIORITY_FREQ == 0) {
       /* We iterate through the list removing as we traverse. */
       for (
         struct list_elem *e = list_begin (&threads_to_update); 
         e != list_end (&threads_to_update); 
-        e = list_remove (e)) {
+        e = list_remove (e))
+      {
         struct thread *t = list_entry (e, struct thread, updelem);
         /* We calculate the recent_cpu/priority of each thread needing update.*/
         calculate_recent_cpu (t, NULL);
