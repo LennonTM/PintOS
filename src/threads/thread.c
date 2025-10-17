@@ -90,7 +90,7 @@ static void
 calculate_load_avg (void)
 {
   /* ready_threads: running thread + ready_list size. Excludes idle thread. */
-  int32_t ready_threads = (int32_t) threads_ready + 
+  int32_t ready_threads = (int32_t) threads_ready() + 
     (thread_current() != idle_thread ? 1 : 0);
 
   /* (59/60) * load_avg */
