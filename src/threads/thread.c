@@ -533,7 +533,9 @@ thread_set_nice (int nice)
   struct thread * t = thread_current ();
   t->nice = nice;
   /* A change in thread niceness can change priority, hence the update. */
+  enum intr_level old_level = intr_disable();
   add_to_update_list (t);
+  intr_set_level(old_level);
 }
 
 /* Returns the current thread's nice value. */
