@@ -105,8 +105,10 @@ calculate_load_avg (void)
 static void
 calculate_recent_cpu (struct thread *t, void *aux UNUSED)
 {
+  /* Timer interrupt calculates recent_cpu/priority. */
+  ASSERT (intr_context());
   /* We don't need to calculate priority/recent_cpu for idle thread. */
-  if (t == idle_thread) return;
+  ASSERT (t != idle_thread);
 
   /* Coefficient C = (2*load_avg)/(2*load_avg + 1) */
   fixed_point double_load_avg = 2 * load_avg;
@@ -124,8 +126,10 @@ calculate_recent_cpu (struct thread *t, void *aux UNUSED)
 static void
 calculate_priority (struct thread *t, void *aux UNUSED)
 {
+  /* Timer interrupt calculates recent_cpu/priority. */
+  ASSERT (intr_context());
   /* We don't need to calculate priority/recent_cpu for idle thread. */
-  if (t == idle_thread) return;
+  ASSERT (t != idle_thread);
 
   /* Term 1: recent_cpu / 4 */
   fixed_point term1 = t->recent_cpu / 4;
