@@ -549,14 +549,14 @@ thread_get_nice (void)
 int
 thread_get_load_avg (void) 
 {
-  return 100*fixed_to_int_nearest(load_avg);
+  return fixed_to_int_nearest(load_avg*100);
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
 int
 thread_get_recent_cpu (void) 
 {
-  return 100*fixed_to_int_nearest(thread_current ()->recent_cpu);
+  return fixed_to_int_nearest(thread_current ()->recent_cpu*100);
 }
 
 /* list_less_func that is used to insert threads
