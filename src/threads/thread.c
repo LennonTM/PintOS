@@ -415,6 +415,15 @@ yield_if_lower_priority(void) {
   intr_set_level(old_level);
 }
 
+/* Adds a thread to the ready list, maintaining priority order */
+static void
+add_to_ready_list(struct thread *t) {
+  list_insert_ordered(&ready_list,
+                      &t->elem,
+                      sort_threads_by_effective_priority,
+                      NULL);
+}
+
 /* Transitions a blocked thread T to the ready-to-run state.
    This is an error if T is not blocked.  (Use thread_yield() to
    make the running thread ready.)
@@ -432,10 +441,7 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  list_insert_ordered(&ready_list,
-                      &t->elem,
-                      sort_threads_by_effective_priority,
-                      NULL);
+  add_to_ready_list(t);
   t->waitlist = &ready_list;
   t->status = THREAD_READY;
   intr_set_level (old_level);
@@ -503,10 +509,7 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread) {
-    list_insert_ordered(&ready_list,
-                        &cur->elem,
-                        sort_threads_by_effective_priority,
-                        NULL);
+    add_to_ready_list(cur);
     cur->waitlist = &ready_list;
   }
   cur->status = THREAD_READY;
