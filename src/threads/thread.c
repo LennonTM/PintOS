@@ -227,14 +227,12 @@ add_to_update_list(struct thread * t) {
   }
 }
 
-/* Called by the timer interrupt handler at each timer tick.
-   Thus, this function runs in an external interrupt context. */
-void
-thread_tick (void) 
+static void
+update_mlfqs_priorities()
 {
   struct thread *t = thread_current ();
 
-  /* We update load_avg then recent_cpu then priority for all threads
+    /* We update load_avg then recent_cpu then priority for all threads
      every second. */
   if(timer_ticks() % TIMER_FREQ == 0){
     calculate_load_avg();
@@ -273,6 +271,18 @@ thread_tick (void)
       yield_if_lower_priority();
     }
   }
+
+}
+
+/* Called by the timer interrupt handler at each timer tick.
+   Thus, this function runs in an external interrupt context. */
+void
+thread_tick (void) 
+{
+  struct thread *t = thread_current ();
+  
+  if (thread_mlfqs)
+    update_mlfqs_priorities();
 
   /* Update statistics. */
   if (t == idle_thread)
