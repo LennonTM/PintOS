@@ -103,6 +103,14 @@ struct thread
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
+    
+    /* Data that allows to accurately propagate priority donation */
+    struct lock *blocking_lock; /* Lock that a thread is for to be released
+                                 * NULL if not blocked */
+    struct list *waitlist;      /* Wait list that the thread participates in
+                                 * can be ready_list or one of the
+                                 * synchronisation primitive's waiters */
+    struct list locks; /* List of currently held locks, sorted by priority */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -151,6 +159,9 @@ int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
 list_less_func sort_threads_by_effective_priority;
+list_less_func sort_locks_by_priority;
 void yield_if_lower_priority(void);
+void update_lock_priority(struct lock*);
+void update_thread_priority(struct thread*);
 
 #endif /* threads/thread.h */

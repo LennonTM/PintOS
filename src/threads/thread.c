@@ -4,6 +4,7 @@
 #include <random.h>
 #include <stdio.h>
 #include <string.h>
+#include "list.h"
 #include "threads/flags.h"
 #include "threads/interrupt.h"
 #include "threads/intr-stubs.h"
@@ -19,6 +20,8 @@
    Used to detect stack overflow.  See the big comment at the top
    of thread.h for details. */
 #define THREAD_MAGIC 0xcd6abf4b
+
+#define max(x, y) ((x) > (y) ? (x) : (y))
 
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
@@ -346,6 +349,8 @@ thread_create (const char *name, int priority,
 
   /* Add to run queue. */
   thread_unblock (t);
+
+  /* New thread might be of higher priority */
   yield_if_lower_priority();
 
   return tid;
@@ -502,21 +507,91 @@ thread_foreach (thread_action_func *func, void *aux)
     }
 }
 
-/* Sets the current thread's priority to NEW_PRIORITY. */
+/* Sets the current thread's base priority to NEW_PRIORITY. */
 void
 thread_set_priority (int new_priority) 
 {
   struct thread *curr_thread = thread_current ();
   curr_thread->priority = new_priority;
-  if (new_priority > curr_thread->effective_priority) {
-    curr_thread->effective_priority = new_priority;
-  }
-  else {
-    // compare highest of the donors to new base
-    // for now now effective_priority = base_priority
-    curr_thread->effective_priority = new_priority;
-  }
+
+  enum intr_level old_level = intr_disable();
+  update_thread_priority(thread_current());
+  intr_set_level(old_level);
+
   yield_if_lower_priority();
+}
+
+/* Updates a lock's priority,
+   Call this when a change has been made to the list of waiters
+   also mutually recursive with update_thread_priority */
+void update_lock_priority(struct lock* lock) {
+  ASSERT (intr_get_level() == INTR_OFF);
+  ASSERT (lock != NULL);
+
+  /* find the lock's index 0 waiter */
+  int old_priority = lock->priority;
+  lock->priority = PRI_MIN;
+  if (!list_empty(&lock->waiters)) {
+    /* lock priority is the maximum of waiters priorities */
+    lock->priority = list_entry(list_front(&lock->waiters),
+                                struct thread,
+                                elem)->effective_priority;
+  }
+  if (lock->priority != old_priority && lock->holder != NULL) {
+    /* Lock priority has changed, propagate this */
+    /* Remove and reinsert to maintain priority order */
+    list_remove(&lock->elem);
+    list_insert_ordered(&lock->holder->locks,
+                        &lock->elem,
+                        sort_locks_by_priority,
+                        NULL);
+    update_thread_priority(lock->holder);
+  }
+}
+
+/* Updates a thread's priority,
+   Call this when a change has been made to
+    - a thread's base priority 
+    - list of held locks
+   also mutually recursive with update_lock_priority */
+void update_thread_priority(struct thread* thread) {
+  ASSERT (intr_get_level() == INTR_OFF);
+  ASSERT (thread != NULL);
+  /* Invariant: thread locks list must be sorted */
+
+  /* track old_priority for detecting any changes */
+  int old_priority = thread->effective_priority;
+
+  /* effective_priority = 
+   *          max(priority, held locks) */
+  thread->effective_priority = thread->priority;
+  if (!list_empty(&thread->locks)) {
+    int locks_priority = list_entry(list_front(&thread->locks),
+                                    struct lock,
+                                    elem)->priority;
+    if (locks_priority > thread->priority) {
+      thread->effective_priority = locks_priority;
+    }
+  }
+
+  if (thread->status == THREAD_RUNNING) {
+    /* No lists need updating */
+    return;
+  }
+
+  /* Check if priority has changed, if so propagate this */
+  if (old_priority != thread->effective_priority && thread->waitlist != NULL) {
+    /* Remove and reinsert to maintain priority order */
+    list_remove(&thread->elem);
+    list_insert_ordered(thread->waitlist,
+                        &thread->elem,
+                        sort_threads_by_effective_priority,
+                        NULL);
+    if (thread->blocking_lock != NULL) {
+      /* Propagate the change to blocking_lock */
+      update_lock_priority(thread->blocking_lock);
+    }
+  }
 }
 
 /* Returns the current thread's priority. */
@@ -685,6 +760,10 @@ thread_init (struct thread *t, const char *name, int priority)
   t->process = NULL;
 #endif   
   t->magic = THREAD_MAGIC;
+
+  t->blocking_lock = NULL;
+  t->waitlist = NULL;
+  list_init(&t->locks);
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
