@@ -434,7 +434,7 @@ add_to_ready_list(struct thread *t) {
   int64_t priority = t->effective_priority;
   ASSERT((PRI_MIN <= priority) && (priority <= PRI_MAX));
   /* Set the priority bit in ready_list_mask to be 1 at index "priority" */
-  ready_list_mask |= 1 << priority;
+  ready_list_mask |= 1ULL << priority;
   /* Put the thread into the back of its corresponding "queue"*/
   list_push_back(&ready_list[priority], &t->elem);
   ready_list_size++;
@@ -595,6 +595,19 @@ void update_lock_priority(struct lock* lock) {
   }
 }
 
+/* Removes the thread from ready_list at the priority queue of specific index*/
+static void
+ready_list_remove(struct thread * t, int index){
+  ASSERT ((PRI_MIN <= index) && (index <= PRI_MAX));
+  ASSERT (ready_list_mask & (1ULL << index));
+  list_remove (&t->elem);
+  /* If queue becomes empty remove corresponding bit in the ready list mask */
+  if (list_empty(&ready_list[index])) {
+    ready_list_mask &= ~(1ULL << index);
+  }
+  ready_list_size--;
+}
+
 /* Updates a thread's priority,
    Adjusts thread's position on the priority list
    the thread is on (ready_list or sema/lock waitlist)
@@ -629,13 +642,18 @@ void update_thread_priority(struct thread* thread) {
 
   /* Check if priority has changed, if so propagate this */
   if (old_priority != thread->effective_priority) {
-    ASSERT(thread->waitlist != NULL);
     /* Remove and reinsert to maintain priority order */
-    list_remove(&thread->elem);
-    list_insert_ordered(thread->waitlist,
+    if (thread->waitlist != NULL){
+      list_remove(&thread->elem);
+      list_insert_ordered(thread->waitlist,
                         &thread->elem,
                         sort_threads_by_effective_priority,
-                        NULL);
+                        NULL);    
+    }
+    else {
+      ready_list_remove(thread, old_priority);
+      add_to_ready_list(thread);
+    }
     if (!thread_mlfqs && thread->blocking_lock != NULL) {
       /* Propagate the change to blocking_lock */
       update_lock_priority(thread->blocking_lock);
@@ -843,7 +861,7 @@ ready_list_pop(void) {
     list_entry (list_pop_front (&ready_list[index]), struct thread, elem);
   /* If queue becomes empty remove corresponding bit in the ready list mask */
   if (list_empty(&ready_list[index])) {
-    ready_list_mask &= ~(1 << index);
+    ready_list_mask &= ~(1ULL << index);
   }
   ready_list_size--;
   return t;
