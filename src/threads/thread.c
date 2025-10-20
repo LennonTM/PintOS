@@ -651,7 +651,7 @@ void update_thread_priority(struct thread* thread) {
                         sort_threads_by_effective_priority,
                         NULL);
   }
-  else if (thread->status == THREAD_RUNNING) {
+  else if (thread->status == THREAD_READY) {
     ready_list_remove(thread, old_priority);
     add_to_ready_list(thread);
   }
