@@ -258,7 +258,7 @@ update_mlfqs_priorities(void)
        every 4 ticks */
     if(t != idle_thread) {
       /* recent_cpu is incremented for running thread, may change priority */
-      addf (t->recent_cpu, 1);
+      t->recent_cpu = addf (t->recent_cpu, 1);
       /* We add t to update list as priority may have changed. */
       add_to_update_list(t);
     }
