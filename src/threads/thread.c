@@ -595,7 +595,7 @@ void update_lock_priority(struct lock* lock) {
   }
 }
 
-/* Removes the thread from ready_list at the priority queue of specific index*/
+/* Removes the thread from ready_list at the queue of specific index */
 static void
 ready_list_remove(struct thread * t, int index){
   ASSERT ((PRI_MIN <= index) && (index <= PRI_MAX));
@@ -636,28 +636,28 @@ void update_thread_priority(struct thread* thread) {
     }
   }
 
-  /* Check if no lists need updating */
+  /* If priority did not change, no lists need to be updated */
+  if (old_priority == thread->effective_priority)
+    return;
+  /* Running thread does not take part in read_list or any waitlist */
   if (thread->status == THREAD_RUNNING)
     return;
 
-  /* Check if priority has changed, if so propagate this */
-  if (old_priority != thread->effective_priority) {
-    /* Remove and reinsert to maintain priority order */
-    if (thread->waitlist != NULL){
-      list_remove(&thread->elem);
-      list_insert_ordered(thread->waitlist,
+  if (thread->status == THREAD_BLOCKED) {
+    ASSERT (thread->waitlist != NULL);
+    list_remove(&thread->elem);
+    list_insert_ordered(thread->waitlist,
                         &thread->elem,
                         sort_threads_by_effective_priority,
-                        NULL);    
-    }
-    else {
-      ready_list_remove(thread, old_priority);
-      add_to_ready_list(thread);
-    }
-    if (!thread_mlfqs && thread->blocking_lock != NULL) {
-      /* Propagate the change to blocking_lock */
-      update_lock_priority(thread->blocking_lock);
-    }
+                        NULL);
+  }
+  else if (thread->status == THREAD_RUNNING) {
+    ready_list_remove(thread, old_priority);
+    add_to_ready_list(thread);
+  }
+  /* If the thread is blocked, propagate the change to the lock */
+  if (!thread_mlfqs && thread->blocking_lock != NULL) {
+    update_lock_priority(thread->blocking_lock);
   }
 }
 
@@ -850,7 +850,7 @@ alloc_frame (struct thread *t, size_t size)
   return t->stack;
 }
 
-/* Pops first thread from the highest priority non-empty queue in ready list*/
+/* Pops first thread from the highest priority non-empty queue in ready list */
 static struct thread *
 ready_list_pop(void) {
   ASSERT (intr_get_level() == INTR_OFF);
