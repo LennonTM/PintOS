@@ -271,7 +271,6 @@ update_mlfqs_priorities(void)
       {
         struct thread *t = list_entry (e, struct thread, updelem);
         /* We calculate the recent_cpu/priority of each thread needing update.*/
-        calculate_recent_cpu (t, NULL);
         calculate_priority (t, NULL);
         /* t has already been updated, dont update anymore. */
         t->should_update = false;
