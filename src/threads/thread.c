@@ -233,7 +233,7 @@ static void
 add_to_update_list(struct thread * t) {
   if (t->should_update == false) {
     t->should_update = true;
-    list_push_back(&threads_to_update, &t->updelem);
+    list_push_front(&threads_to_update, &t->updelem);
   }
 }
 
