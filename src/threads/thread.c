@@ -644,7 +644,7 @@ void update_thread_priority(struct thread* thread) {
   if (thread->status == THREAD_RUNNING)
     return;
 
-  if (!thread_mlfqs && thread->status == THREAD_BLOCKED) {
+  if (thread->status == THREAD_BLOCKED) {
     ASSERT (thread->waitlist != NULL);
     list_remove(&thread->elem);
     list_insert_ordered(thread->waitlist,
