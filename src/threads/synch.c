@@ -211,12 +211,12 @@ lock_acquire (struct lock *lock)
                           &thread_current ()->elem,
                           sort_threads_by_effective_priority,
                           NULL);
-      /* Maintain blocking lock and waitlist for priority donation */
+      /* Maintain blocking lock and its priority for priority donation */
       if (!thread_mlfqs) {
         thread_current()->blocking_lock = lock;
-        thread_current()->waitlist = &lock->waiters;
         update_lock_priority(lock);
       }
+      thread_current()->waitlist = &lock->waiters;
       thread_block ();
     }
   lock->holder = thread_current();
