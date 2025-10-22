@@ -286,10 +286,10 @@ lock_release (struct lock *lock)
     update_lock_priority(lock);
     /* Thread released a lock, so its priority might drop */
     update_thread_priority(thread_current());
-
-    /* Priority of the holder thread may have decreased */
-    yield_if_lower_priority();
   }
+  /* Unblocked thread may have higher priority. And current thread priority
+     could decrease in non-mlfqs case. */
+  yield_if_lower_priority();
 
   intr_set_level (old_level);
 }
