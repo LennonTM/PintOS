@@ -582,6 +582,19 @@ thread_set_priority (int new_priority)
   yield_if_lower_priority();
 }
 
+/* Removes the thread from ready_list at the queue of specific index */
+static void
+ready_list_remove(struct thread * t, int index){
+  ASSERT ((PRI_MIN <= index) && (index <= PRI_MAX));
+  ASSERT (ready_list_mask & (1ULL << index));
+  list_remove (&t->elem);
+  /* If queue becomes empty remove corresponding bit in the ready list mask */
+  if (list_empty(&ready_list[index])) {
+    ready_list_mask &= ~(1ULL << index);
+  }
+  ready_list_size--;
+}
+
 /* Updates lock's priority based on its waiters
    propagates the change to the lock holder.
    Must be called when a change has been made to the list of waiters
@@ -615,19 +628,6 @@ update_lock_priority(struct lock* lock) {
     /* Propagate the change to the lock holder */
     update_thread_priority(lock->holder);
   }
-}
-
-/* Removes the thread from ready_list at the queue of specific index */
-static void
-ready_list_remove(struct thread * t, int index){
-  ASSERT ((PRI_MIN <= index) && (index <= PRI_MAX));
-  ASSERT (ready_list_mask & (1ULL << index));
-  list_remove (&t->elem);
-  /* If queue becomes empty remove corresponding bit in the ready list mask */
-  if (list_empty(&ready_list[index])) {
-    ready_list_mask &= ~(1ULL << index);
-  }
-  ready_list_size--;
 }
 
 /* Updates thread's priority,
