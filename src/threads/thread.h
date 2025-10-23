@@ -106,12 +106,13 @@ struct thread
     struct list_elem elem;              /* List element. */
     
     /* Data that allows to accurately propagate priority donation */
-    struct lock *blocking_lock; /* Lock that a thread is for to be released
-                                 * NULL if not blocked */
-    struct list *waitlist;      /* Wait list that the thread participates in
-                                 * can be ready_list or one of the
-                                 * synchronisation primitive's waiters */
-    struct list locks; /* List of currently held locks, sorted by priority */
+    struct lock *blocking_lock; /* Lock that a thread is waiting for
+                                 * to be released NULL if not blocked */
+    struct list *waitlist;      /* Wait list that the thread participates in:
+                                 * one of the synchronisation primitive's
+                                 * waiters member */
+    struct list locks; /* List of currently held locks,
+                        * sorted in decreasing order of priority */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
