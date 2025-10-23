@@ -728,8 +728,9 @@ thread_get_recent_cpu (void)
 }
 
 /* list_less_func that is used to insert threads
- * into lists in the order of decreasing priority */
-bool sort_threads_by_effective_priority (const struct list_elem *a_,
+   into lists in the order of decreasing effective priority */
+bool
+sort_threads_by_effective_priority (const struct list_elem *a_,
                                          const struct list_elem *b_,
                                          void *aux UNUSED) {
   struct thread *a = list_entry(a_, struct thread, elem);
@@ -885,7 +886,8 @@ ready_list_pop(void) {
   int index = get_highest_priority();
   struct thread* t =
     list_entry (list_pop_front (&ready_list[index]), struct thread, elem);
-  /* If queue becomes empty remove corresponding bit in the ready list mask */
+  /* If the list becomes empty,
+     unset the corresponding bit in the ready list mask */
   if (list_empty(&ready_list[index])) {
     ready_list_mask &= ~(1ULL << index);
   }
