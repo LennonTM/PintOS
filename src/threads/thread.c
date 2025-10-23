@@ -409,17 +409,23 @@ thread_block (void)
   schedule ();
 }
 
-/* Gets the highest priority which has a non-empty queue in ready list*/
+/* Gets the highest priority which has a non-empty queue in ready list */
 static int
 get_highest_priority(void){
   int leading_zeros = __builtin_clzll(ready_list_mask);
+  /* Highest priority is given by the position
+     of the most significant set bit of ready_list_mask */
   return PRI_MAX - leading_zeros;
 }
 
+/* Checks if there is a ready thread of higher priority
+   than currently running thread
+   - immediately preempts the thread if not in the interrupt context
+   - if in the interrupt context, calls intr_yield_on_return */
 void
 yield_if_lower_priority(void) {
-  /* the highest priority ready thread */
   enum intr_level old_level = intr_disable();
+  /* Return if there is no other ready thread */
   if (threads_ready() == 0) {
     intr_set_level(old_level);
     return;
@@ -441,9 +447,10 @@ add_to_ready_list(struct thread *t) {
   ASSERT(intr_get_level() == INTR_OFF);
   int64_t priority = t->effective_priority;
   ASSERT((PRI_MIN <= priority) && (priority <= PRI_MAX));
-  /* Set the priority bit in ready_list_mask to be 1 at index "priority" */
+  /* Set the priority bit of ready_list_mask to
+     indicate that ready_list[priority] is not empty */
   ready_list_mask |= 1ULL << priority;
-  /* Put the thread into the back of its corresponding "queue"*/
+  /* Put the thread into the back of its corresponding list */
   list_push_back(&ready_list[priority], &t->elem);
   ready_list_size++;
 }
@@ -565,6 +572,9 @@ thread_set_priority (int new_priority)
   struct thread *curr_thread = thread_current ();
   curr_thread->priority = new_priority;
 
+  /* Disable interrupts to synchronise updates
+     of thread's effective_priority with potential
+     priority donations from other threads */
   enum intr_level old_level = intr_disable();
   update_thread_priority(thread_current());
   intr_set_level(old_level);
@@ -572,19 +582,20 @@ thread_set_priority (int new_priority)
   yield_if_lower_priority();
 }
 
-/* Updates a lock's priority based on its waiters
-   propagates the change to the lock holder
+/* Updates lock's priority based on its waiters
+   propagates the change to the lock holder.
+   Must be called when a change has been made to the list of waiters
 
-   Call this when a change has been made to the list of waiters
    is mutually recursive with update_thread_priority
 
    must NOT be called when using mlfq scheduler */
-void update_lock_priority(struct lock* lock) {
+void
+update_lock_priority(struct lock* lock) {
   ASSERT (intr_get_level() == INTR_OFF);
   ASSERT (lock != NULL);
   ASSERT (!thread_mlfqs);
 
-  /* find the lock's index 0 waiter */
+  /* Find the lock's highest priority waiter */
   int old_priority = lock->priority;
   lock->priority = PRI_MIN;
   if (!list_empty(&lock->waiters)) {
@@ -601,6 +612,7 @@ void update_lock_priority(struct lock* lock) {
                         &lock->elem,
                         sort_locks_by_priority,
                         NULL);
+    /* Propagate the change to the lock holder */
     update_thread_priority(lock->holder);
   }
 }
@@ -618,24 +630,25 @@ ready_list_remove(struct thread * t, int index){
   ready_list_size--;
 }
 
-/* Updates a thread's priority,
+/* Updates thread's priority,
    Adjusts thread's position on the priority list
-   the thread is on (ready_list or sema/lock waitlist)
+   the thread is on (ready_list or sema, lock, monitor waitlist)
 
    Call this when a change has been made to
     - a thread's base priority 
     - list of held locks
+
    is mutually recursive with update_lock_priority */
-void update_thread_priority(struct thread* thread) {
+void
+update_thread_priority(struct thread* thread) {
   ASSERT (intr_get_level() == INTR_OFF);
   ASSERT (thread != NULL);
 
-  /* track old_priority for detecting any changes */
+  /* Track old_priority for detecting any changes */
   int old_priority = thread->effective_priority;
 
-  /* effective_priority = 
-   *          max(priority, held locks) */
-  /* Invariant: thread locks list must be sorted */
+  /* effective_priority =
+             max(priority, held locks) */
   thread->effective_priority = thread->priority;
   if (!thread_mlfqs && !list_empty(&thread->locks)) {
     int locks_priority = list_entry(list_front(&thread->locks),
@@ -653,6 +666,8 @@ void update_thread_priority(struct thread* thread) {
   if (thread->status == THREAD_RUNNING)
     return;
 
+  /* Adjust thread's position on its waitlist
+     to maintain it in decreasing order of priority */
   if (thread->status == THREAD_BLOCKED) {
     ASSERT (thread->waitlist != NULL);
     list_remove(&thread->elem);
@@ -661,11 +676,12 @@ void update_thread_priority(struct thread* thread) {
                         sort_threads_by_effective_priority,
                         NULL);
   }
+
   if (thread->status == THREAD_READY) {
     ready_list_remove(thread, old_priority);
     add_to_ready_list(thread);
   }
-  /* If the thread is blocked, propagate the change to the lock */
+  /* If the thread is blocked by a lock, propagate the change to the lock */
   if (!thread_mlfqs && thread->blocking_lock != NULL) {
     update_lock_priority(thread->blocking_lock);
   }
