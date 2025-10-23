@@ -214,6 +214,8 @@ lock_acquire (struct lock *lock)
       /* Maintain blocking lock and its priority for priority donation */
       if (!thread_mlfqs) {
         thread_current()->blocking_lock = lock;
+        /* Waitlist of a lock got updated
+           so priority must be updated */
         update_lock_priority(lock);
       }
       thread_current()->waitlist = &lock->waiters;
@@ -305,6 +307,9 @@ lock_held_by_current_thread (const struct lock *lock)
   return lock->holder == thread_current ();
 }
 
+/* Compares 2 locks by their priority.
+   It is used to keep the list of thread's held locks
+   sorted in decreasing order of priority */
 bool sort_locks_by_priority(const struct list_elem *a_,
                              const struct list_elem *b_,
                              void *aux UNUSED) {
