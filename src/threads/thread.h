@@ -5,6 +5,8 @@
 #include <list.h>
 #include <stdint.h>
 
+#include "fixed-point.h"
+
 /* States in a thread's life cycle. */
 enum thread_status
   {
@@ -23,6 +25,7 @@ typedef int tid_t;
 #define PRI_MIN 0                       /* Lowest priority. */
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
+#define PRI_NUM 64                      /* Number of priorities. */
 
 #ifdef USERPROG
 #include "userprog/process.h"
@@ -92,10 +95,24 @@ struct thread
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
+    int effective_priority;             /* Effective priority */
     struct list_elem allelem;           /* List element for all threads list. */
+    fixed_point recent_cpu;             /* Measure of received cpu time. */
+    int32_t nice;                       /* Threads willingness to yield*/
+    struct list_elem updelem;           /* List element for threads_to_update.*/
+    bool should_update;                 /* Indicates priority should update. */
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
+    
+    /* Data that allows to accurately propagate priority donation */
+    struct lock *blocking_lock; /* Lock that a thread is waiting for
+                                 * to be released NULL if not blocked */
+    struct list *waitlist;      /* Wait list that the thread participates in:
+                                 * one of the synchronisation primitive's
+                                 * waiters member */
+    struct list locks; /* List of currently held locks,
+                        * sorted in decreasing order of priority */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -142,5 +159,11 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+
+list_less_func sort_threads_by_effective_priority;
+list_less_func sort_locks_by_priority;
+void yield_if_lower_priority(void);
+void update_lock_priority(struct lock*);
+void update_thread_priority(struct thread*);
 
 #endif /* threads/thread.h */
