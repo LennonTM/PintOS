@@ -163,9 +163,6 @@ calculate_priority (struct thread *t, void *aux UNUSED)
   ASSERT((PRI_MIN <= new_priority) && (new_priority <= PRI_MAX));
 
   t->priority = new_priority;
-  /* Updates the effective priority and alters the priority-based lists
-     accordingly. */
-  update_thread_priority(t, NULL);
 }
 
 /* Initializes the threading system by transforming the code
@@ -255,9 +252,15 @@ update_mlfqs_priorities(void)
   /* Every second, load_avg, recent_cpu and priority of all threads
      is updated in the order specified */
   if (timer_ticks() % TIMER_FREQ == 0) {
+    /* We calculate load_avg then recent_cpu then priority in that order,
+       since each variable depends on the previous, making sure we dont
+       use old values in calculations. */
     calculate_load_avg();
     thread_foreach(&calculate_recent_cpu, NULL);
     thread_foreach(&calculate_priority, NULL);
+    /* After updating the effective priority, alters the priority-based lists
+       accordingly. */
+    thread_foreach(&update_thread_priority, NULL);
     /* Thread priorities could have changed, so we should yield if the current
        thread does not have highest priority.*/
     yield_if_lower_priority();
@@ -283,6 +286,9 @@ update_mlfqs_priorities(void)
       struct thread *t = list_entry (e, struct thread, updelem);
       /* We calculate the priority of each thread pending an update */
       calculate_priority (t, NULL);
+      /* After updating the effective priority, alters the priority-based lists
+         accordingly. */
+      update_thread_priority(t, NULL);
       /* t has already been updated, dont update anymore */
       t->should_update = false;
     }
