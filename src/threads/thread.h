@@ -164,6 +164,6 @@ list_less_func sort_threads_by_effective_priority;
 list_less_func sort_locks_by_priority;
 void yield_if_lower_priority(void);
 void update_lock_priority(struct lock*);
-void update_thread_priority(struct thread*);
+void update_thread_priority(struct thread*, void* aux UNUSED);
 
 #endif /* threads/thread.h */

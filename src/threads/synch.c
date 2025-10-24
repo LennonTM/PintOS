@@ -287,7 +287,7 @@ lock_release (struct lock *lock)
     /* A waiter got removed, so lock->priority is outdated */
     update_lock_priority(lock);
     /* Thread released a lock, so its priority might drop */
-    update_thread_priority(thread_current());
+    update_thread_priority(thread_current(), NULL);
   }
   /* Unblocked thread may have higher priority. And current thread priority
      could decrease in non-mlfqs case. */

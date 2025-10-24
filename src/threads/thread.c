@@ -165,7 +165,7 @@ calculate_priority (struct thread *t, void *aux UNUSED)
   t->priority = new_priority;
   /* Updates the effective priority and alters the priority-based lists
      accordingly. */
-  update_thread_priority(t);
+  update_thread_priority(t, NULL);
 }
 
 /* Initializes the threading system by transforming the code
@@ -576,7 +576,7 @@ thread_set_priority (int new_priority)
      of thread's effective_priority with potential
      priority donations from other threads */
   enum intr_level old_level = intr_disable();
-  update_thread_priority(thread_current());
+  update_thread_priority(thread_current(), NULL);
   intr_set_level(old_level);
 
   yield_if_lower_priority();
@@ -626,7 +626,7 @@ update_lock_priority(struct lock* lock) {
                         sort_locks_by_priority,
                         NULL);
     /* Propagate the change to the lock holder */
-    update_thread_priority(lock->holder);
+    update_thread_priority(lock->holder, NULL);
   }
 }
 
@@ -640,7 +640,7 @@ update_lock_priority(struct lock* lock) {
 
    is mutually recursive with update_lock_priority */
 void
-update_thread_priority(struct thread* thread) {
+update_thread_priority(struct thread* thread, void* aux UNUSED) {
   ASSERT (intr_get_level() == INTR_OFF);
   ASSERT (thread != NULL);
 
