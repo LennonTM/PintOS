@@ -137,8 +137,6 @@ calculate_recent_cpu (struct thread *t, void *aux UNUSED)
 static void
 calculate_priority (struct thread *t, void *aux UNUSED)
 {
-  /* Timer interrupt calculates recent_cpu/priority. */
-  ASSERT (intr_context());
   /* We don't need to calculate priority/recent_cpu for idle thread. */
   if (t == idle_thread)
     return;
@@ -854,8 +852,12 @@ thread_init (struct thread *t, const char *name, int priority)
     t->nice = parent->nice;
     t->recent_cpu = parent->recent_cpu;
   }
+  /* Priority is calculated on initialisation in mlfqs case. */
+  if(thread_mlfqs) {
+    calculate_priority (t, NULL);
+  }
     
-  t->effective_priority = priority;
+  t->effective_priority = t->priority;
 #ifdef USERPROG
   t->process = NULL;
 #endif   
