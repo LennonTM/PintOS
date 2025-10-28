@@ -18,6 +18,7 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "devices/timer.h"
 
 static bool process_init (struct thread *t);
 static thread_func start_process NO_RETURN;
@@ -129,6 +130,8 @@ start_process (void *args_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
+  /* Stub for process_wait */
+  timer_msleep(10 * 1000);
   return PROC_ERR;
 }
 
