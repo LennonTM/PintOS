@@ -126,9 +126,10 @@ syscall_init (void)
 }
 
 static void
-syscall_handler (struct intr_frame *f UNUSED) 
+syscall_handler (struct intr_frame *f) 
 {
   uint32_t syscall_num = *(uint32_t*)f->esp;
   printf ("system call: %d\n", syscall_num);
+  handlers[syscall_num](f);
   process_exit (PROC_ERR);
 }
