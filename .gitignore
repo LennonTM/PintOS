@@ -25,3 +25,5 @@
 *.toc
 
 .vscode
+compile_commands.json
+.cache
