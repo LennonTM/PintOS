@@ -11,6 +11,114 @@ static void syscall_handler (struct intr_frame *);
    and calls corresponding system call implementation */
 typedef void (*handle_syscall)(struct intr_frame *f);
 
+static void 
+halt (void) NO_RETURN UNUSED;
+
+static void
+handle_halt(struct intr_frame *f) UNUSED;
+
+
+static void 
+exit (int status) NO_RETURN UNUSED;
+
+static void 
+handle_exit (struct intr_frame *f) NO_RETURN UNUSED;
+
+
+static pid_t 
+exec (const char *file) UNUSED;
+
+static void
+handle_exec (struct intr_frame *f) UNUSED;
+
+
+static int 
+wait (pid_t wait_pid) UNUSED;
+
+static void
+handle_wait (struct intr_frame *f) UNUSED;
+
+
+static bool 
+create (const char *file, unsigned initial_size) UNUSED;
+
+static void
+handle_create (struct intr_frame *f) UNUSED;
+
+
+static bool 
+remove (const char *file) UNUSED;
+
+static void
+handle_remove (struct intr_frame *f) UNUSED;
+
+
+static int 
+open (const char *file) UNUSED;
+
+static void
+handle_open (struct intr_frame *f) UNUSED;
+
+
+static int 
+filesize (int fd) UNUSED;
+
+static void
+handle_filesize (struct intr_frame *f) UNUSED;
+
+
+static int 
+read (int fd, void *buffer, unsigned length) UNUSED;
+
+static void
+handle_read (struct intr_frame *f) UNUSED;
+
+
+static int 
+write (int fd, const void *buffer, unsigned length) UNUSED;
+
+static void
+handle_write (struct intr_frame *f) UNUSED;
+
+
+static void 
+seek (int fd, unsigned position) UNUSED;
+
+static void
+handle_seek (struct intr_frame *f) UNUSED;
+
+
+static unsigned 
+tell (int fd) UNUSED;
+
+static void
+handle_tell (struct intr_frame *f) UNUSED;
+
+
+static void 
+close (int fd) UNUSED;
+
+static void
+handle_close (struct intr_frame *f) UNUSED;
+
+#define TOTAL_SYSCALLS 13
+
+static handle_syscall handlers[TOTAL_SYSCALLS] = {
+  &handle_halt,
+  &handle_exit,
+  &handle_exec,
+  &handle_wait,
+  &handle_create,
+  &handle_remove,
+  &handle_open,
+  &handle_filesize,
+  &handle_read,
+  &handle_write,
+  &handle_seek,
+  &handle_tell,
+  &handle_close,
+};
+
 void
 syscall_init (void) 
 {
@@ -24,94 +132,3 @@ syscall_handler (struct intr_frame *f UNUSED)
   printf ("system call: %d\n", syscall_num);
   process_exit (PROC_ERR);
 }
-
-static void
-handle_halt(struct intr_frame *f) UNUSED;
-
-static void 
-halt (void) NO_RETURN UNUSED;
-
-
-static void 
-handle_exit (int status) NO_RETURN UNUSED;
-
-static void 
-exit (int status) NO_RETURN UNUSED;
-
-
-static pid_t 
-handle_exec (const char *file) UNUSED;
-
-static pid_t 
-exec (const char *file) UNUSED;
-
-
-static int 
-handle_wait (pid_t wait_pid) UNUSED;
-
-static int 
-wait (pid_t wait_pid) UNUSED;
-
-
-static bool 
-handle_create (const char *file, unsigned initial_size) UNUSED;
-
-static bool 
-create (const char *file, unsigned initial_size) UNUSED;
-
-
-static bool 
-handle_remove (const char *file) UNUSED;
-
-static bool 
-remove (const char *file) UNUSED;
-
-
-static int 
-handle_open (const char *file) UNUSED;
-
-static int 
-open (const char *file) UNUSED;
-
-
-static int 
-handle_filesize (int fd) UNUSED;
-
-static int 
-filesize (int fd) UNUSED;
-
-
-static int 
-handle_read (int fd, void *buffer, unsigned length) UNUSED;
-
-static int 
-read (int fd, void *buffer, unsigned length) UNUSED;
-
-
-static int 
-handle_write (int fd, const void *buffer, unsigned length) UNUSED;
-
-static int 
-write (int fd, const void *buffer, unsigned length) UNUSED;
-
-
-static void 
-handle_seek (int fd, unsigned position) UNUSED;
-
-static void 
-seek (int fd, unsigned position) UNUSED;
-
-
-static unsigned 
-handle_tell (int fd) UNUSED;
-
-static unsigned 
-tell (int fd) UNUSED;
-
-
-static void 
-handle_close (int fd) UNUSED;
-
-static void 
-close (int fd) UNUSED;
-
