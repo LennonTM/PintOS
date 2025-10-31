@@ -56,8 +56,18 @@ process_execute (const char *cmd_line)
     return TID_ERROR;
   strlcpy (cmd_line_copy, cmd_line, PGSIZE);
 
+  /* Threads share a limit of 16 characters */
+  char thread_name[MAX_NAME_LENGTH];
+  char *cmd_line_ptr = cmd_line_copy;
+  while (*cmd_line_ptr == ' ')
+    cmd_line_ptr++;
+
+  char *save_ptr;
+  strlcpy (thread_name, cmd_line, MAX_NAME_LENGTH);
+  strtok_r (thread_name, " ", &save_ptr);
+
   /* Create a new thread to execute CMD_LINE. */
-  tid = thread_create (cmd_line, PRI_DEFAULT, start_process, cmd_line_copy);
+  tid = thread_create (thread_name, PRI_DEFAULT, start_process, cmd_line_copy);
   if (tid == TID_ERROR)
     palloc_free_page (cmd_line_copy);
     
