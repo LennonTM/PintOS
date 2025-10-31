@@ -104,7 +104,7 @@ static void write_int_to_stack(void **esp, int n) {
 static void write_string_to_stack(void **esp, char *str) {
   char *esp_str = (char *)*esp;
   int str_len = strlen(str);
-  strlcpy(esp_str, str, str_len);
+  strlcpy(esp_str, str, str_len + 1);
   *esp = (char *)(*esp) + (str_len + 1) * sizeof(char);
 }
 /* writes pointer to stack and increments the esp
@@ -192,7 +192,7 @@ start_process (void *args_)
   /* We tokenise the cmd line and write the 
      token and their pointer to the stack */
   for (; token != NULL; token = strtok_r (NULL, " ", &save_ptr)) {
-    write_pointer_to_stack(&esp_ptr, &esp_str);
+    write_pointer_to_stack(&esp_ptr, esp_str);
     write_string_to_stack (&esp_str, token);
   }
   write_pointer_to_stack(&esp_ptr, NULL);
