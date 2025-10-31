@@ -27,6 +27,8 @@ typedef int tid_t;
 #define PRI_MAX 63                      /* Highest priority. */
 #define PRI_NUM 64                      /* Number of priorities. */
 
+#define MAX_NAME_LENGTH 16
+
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -92,7 +94,7 @@ struct thread
     /* Owned by thread.c. */
     tid_t tid;                          /* Thread identifier. */
     enum thread_status status;          /* Thread state. */
-    char name[16];                      /* Name (for debugging purposes). */
+    char name[MAX_NAME_LENGTH];         /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
     int effective_priority;             /* Effective priority */

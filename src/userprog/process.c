@@ -24,6 +24,10 @@ static bool process_init (struct thread *t);
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
+/* number of bytes to set-up a minimal stack 
+   where argv, argc and return address are stored */
+#define MIN_STACK_SIZE 12
+
 /* Initialises the main thread as a minimal root OS process.
    Note that when this thread/process terminates, the OS will shutdown. */
 void
@@ -52,8 +56,18 @@ process_execute (const char *cmd_line)
     return TID_ERROR;
   strlcpy (cmd_line_copy, cmd_line, PGSIZE);
 
+  /* Threads share a limit of 16 characters */
+  char thread_name[MAX_NAME_LENGTH];
+  char *cmd_line_ptr = cmd_line_copy;
+  while (*cmd_line_ptr == ' ')
+    cmd_line_ptr++;
+
+  char *save_ptr;
+  strlcpy (thread_name, cmd_line, MAX_NAME_LENGTH);
+  strtok_r (thread_name, " ", &save_ptr);
+
   /* Create a new thread to execute CMD_LINE. */
-  tid = thread_create (cmd_line, PRI_DEFAULT, start_process, cmd_line_copy);
+  tid = thread_create (thread_name, PRI_DEFAULT, start_process, cmd_line_copy);
   if (tid == TID_ERROR)
     palloc_free_page (cmd_line_copy);
     
@@ -78,13 +92,71 @@ process_init (struct thread *t)
   return true;
 }
 
+/* writes int to stack and increments the esp
+   unlike pushing to the stack, this grows upwards*/
+static void write_int_to_stack(void **esp, int n) {
+  int *esp_int = (int *)*esp;
+  *esp_int = n;
+  *esp = (char *)(*esp) + sizeof(n);
+}
+/* writes string to stack and increments the esp
+   unlike pushing to the stack, this grows upwards*/
+static void write_string_to_stack(void **esp, char *str) {
+  char *esp_str = (char *)*esp;
+  int str_len = strlen(str);
+  strlcpy(esp_str, str, str_len);
+  *esp = (char *)(*esp) + (str_len + 1) * sizeof(char);
+}
+/* writes pointer to stack and increments the esp
+   unlike pushing to the stack, this grows upwards*/
+static void write_pointer_to_stack(void **esp, void *ptr) {
+  void **esp_ptr = (void **)*esp;
+  *esp_ptr = ptr;
+  *esp = (char *)(*esp) + sizeof(ptr);
+}
+
+
 /* A thread function that loads a user process and starts it
    running. */
 static void
 start_process (void *args_)
 {
   struct thread *cur = thread_current ();
-  char *file_name = args_;
+
+  
+
+  /* for loop to calculate the following
+   * args_len:    string length (including whitespace)
+   * space_count: number of spaces found 
+   * argc         number of arguments found */
+  int args_len = 0;
+  int space_count = 0;
+  int argc = 0;
+  bool is_arg = false;
+
+  char *args = (char *)args_;
+
+  /* args_len increases as we traverse the string */
+  for (; args[args_len] != '\0'; args_len++) {
+    if (args[args_len] == ' ') {
+      /* whitespace, then increment space_count */
+      space_count++;
+      is_arg = false;
+    } else {
+      if (!is_arg) {
+        /* switching from whitespace to argument, increment argc */
+        is_arg = true;
+        argc++;
+      }
+    }
+  }
+
+  /* begin tokenising args_
+   * filename is the first argument */
+  char *save_ptr;
+  char *token = strtok_r (args, " ", &save_ptr);
+
+  char *file_name = token;
   struct intr_frame if_;
   bool success;
   
@@ -101,10 +173,40 @@ start_process (void *args_)
       success = load (file_name, &if_.eip, &if_.esp);
     }
 
+  /* push arguments onto the stack */
+  /* space to allocate to argument strings is equal to 
+   * (args_len - space_count) characters and argc null terminals */
+  void *esp_str  = if_.esp - (args_len - space_count + argc);
+
+  /* space to allocate to argument pointers array is equal to 
+   * (size of a string pointer) * (number of arguments + null terminator) 
+   * Before allocating space, memory align the stack pointer */
+   /* We save a copy of esp_ptr, so we can point to the first argument later */
+  void *esp_str_aligned = (esp_str - ((uintptr_t)esp_str % sizeof(char *)));
+  void *esp_ptr = esp_str_aligned - sizeof(char *) * (argc + 1);
+  void *esp_ptr_cpy = esp_ptr;
+
+  /* set new stack pointer */
+  if_.esp = esp_ptr - MIN_STACK_SIZE;
+
+  /* We tokenise the cmd line and write the 
+     token and their pointer to the stack */
+  for (; token != NULL; token = strtok_r (NULL, " ", &save_ptr)) {
+    write_pointer_to_stack(&esp_ptr, &esp_str);
+    write_string_to_stack (&esp_str, token);
+  }
+  write_pointer_to_stack(&esp_ptr, NULL);
+
+  /* we write return address, argc and argv to stack*/
+  void *esp_cpy = if_.esp;
+  write_pointer_to_stack(&esp_cpy, NULL);
+  write_int_to_stack(&esp_cpy, argc);
+  write_pointer_to_stack(&esp_cpy, esp_ptr_cpy);
+
   /* After loading, we are done with the command-line copy passed to us by process_execute. */
-  palloc_free_page (file_name);
-  
-  /* If load failed, terminate the process. */
+  palloc_free_page (args_);
+
+    /* If load failed, terminate the process. */
   if (!success) 
     process_exit (PROC_ERR);
 
@@ -493,7 +595,7 @@ setup_stack (void **esp)
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success)
-        *esp = PHYS_BASE - 12;
+        *esp = PHYS_BASE;
       else
         palloc_free_page (kpage);
     }
