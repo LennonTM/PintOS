@@ -12,6 +12,8 @@ static long long page_fault_cnt;
 static void kill (struct intr_frame *);
 static void page_fault (struct intr_frame *);
 
+#define CONTROLLED_PAGE_FAULT 0xffffffff
+
 /* Registers handlers for interrupts that can be caused by user
    programs.
 
@@ -145,15 +147,28 @@ page_fault (struct intr_frame *f)
   not_present = (f->error_code & PF_P) == 0;
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
+  
+  if (user) {
+    /* Bug in the user code */
 
-  /* To implement virtual memory, delete the rest of the function
-     body, and replace it with code that brings in the page to
-     which fault_addr refers. */
-  printf ("Page fault at %p: %s error %s page in %s context.\n",
-          fault_addr,
-          not_present ? "not present" : "rights violation",
-          write ? "writing" : "reading",
-          user ? "user" : "kernel");
-  kill (f);
+    /* To implement virtual memory, delete the rest of the function
+      body, and replace it with code that brings in the page to
+      which fault_addr refers. */
+    printf ("Page fault at %p: %s error %s page in %s context.\n",
+            fault_addr,
+            not_present ? "not present" : "rights violation",
+            write ? "writing" : "reading",
+            user ? "user" : "kernel");
+    kill (f);
+  }
+  else {
+    /* Controlled access by the kernel
+       IMPORTANT: could still be a kernel bug
+    */
+    /* Return to a saved instruction */
+    f->eip = (void *) f->eax;
+    /* Communicate the page fault back */
+    f->eax = CONTROLLED_PAGE_FAULT;
+  }
 }
 
