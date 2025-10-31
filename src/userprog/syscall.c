@@ -130,19 +130,19 @@ handle_close (struct intr_frame *f) {
 #define TOTAL_SYSCALLS 13
 
 static handle_syscall handlers[TOTAL_SYSCALLS] = {
-  &handle_halt,
-  &handle_exit,
-  &handle_exec,
-  &handle_wait,
-  &handle_create,
-  &handle_remove,
-  &handle_open,
-  &handle_filesize,
-  &handle_read,
-  &handle_write,
-  &handle_seek,
-  &handle_tell,
-  &handle_close,
+  [SYS_HALT]=&handle_halt,
+  [SYS_EXIT]=&handle_exit,
+  [SYS_EXEC]=&handle_exec,
+  [SYS_WAIT]=&handle_wait,
+  [SYS_CREATE]=&handle_create,
+  [SYS_REMOVE]=&handle_remove,
+  [SYS_OPEN]=&handle_open,
+  [SYS_FILESIZE]=&handle_filesize,
+  [SYS_READ]=&handle_read,
+  [SYS_WRITE]=&handle_write,
+  [SYS_SEEK]=&handle_seek,
+  [SYS_TELL]=&handle_tell,
+  [SYS_CLOSE]=&handle_close,
 };
 
 void
