@@ -6,6 +6,145 @@
 
 static void syscall_handler (struct intr_frame *);
 
+/* Type of a specific system call handler helper function
+   Each handler takes the frame, gets the arguments
+   and calls corresponding system call implementation */
+typedef void (*handle_syscall)(struct intr_frame *f);
+
+static void 
+halt (void) NO_RETURN;
+
+static void
+handle_halt(struct intr_frame *f) {
+  printf("Handler: handle_halt called\n");
+}
+
+
+static void 
+exit (int status) NO_RETURN;
+
+static void 
+handle_exit (struct intr_frame *f) {
+  printf("Handler: handle_exit  called\n");
+}
+
+
+static pid_t 
+exec (const char *file);
+
+static void
+handle_exec (struct intr_frame *f) {
+  printf("Handler: handle_exec  called\n");
+}
+
+
+static int 
+wait (pid_t wait_pid);
+
+static void
+handle_wait (struct intr_frame *f) {
+  printf("Handler: handle_wait  called\n");
+}
+
+
+static bool 
+create (const char *file, unsigned initial_size);
+
+static void
+handle_create (struct intr_frame *f) {
+  printf("Handler: handle_create  called\n");
+}
+
+
+static bool 
+remove (const char *file);
+
+static void
+handle_remove (struct intr_frame *f) {
+  printf("Handler: handle_remove  called\n");
+}
+
+
+static int 
+open (const char *file);
+
+static void
+handle_open (struct intr_frame *f) {
+  printf("Handler: handle_open  called\n");
+}
+
+
+static int 
+filesize (int fd);
+
+static void
+handle_filesize (struct intr_frame *f) {
+  printf("Handler: handle_filesize  called\n");
+}
+
+
+static int 
+read (int fd, void *buffer, unsigned length);
+
+static void
+handle_read (struct intr_frame *f) {
+  printf("Handler: handle_read  called\n");
+}
+
+
+static int 
+write (int fd, const void *buffer, unsigned length);
+
+static void
+handle_write (struct intr_frame *f) {
+  printf("Handler: handle_write  called\n");
+}
+
+
+static void 
+seek (int fd, unsigned position);
+
+static void
+handle_seek (struct intr_frame *f) {
+  printf("Handler: handle_seek  called\n");
+}
+
+
+static unsigned 
+tell (int fd);
+
+static void
+handle_tell (struct intr_frame *f) {
+  printf("Handler: handle_tell  called\n");
+}
+
+
+static void 
+close (int fd);
+
+static void
+handle_close (struct intr_frame *f) {
+  printf("Handler: handle_close  called\n");
+}
+
+#define TOTAL_SYSCALLS 13
+
+static handle_syscall handlers[TOTAL_SYSCALLS] = {
+  &handle_halt,
+  &handle_exit,
+  &handle_exec,
+  &handle_wait,
+  &handle_create,
+  &handle_remove,
+  &handle_open,
+  &handle_filesize,
+  &handle_read,
+  &handle_write,
+  &handle_seek,
+  &handle_tell,
+  &handle_close,
+};
+
 void
 syscall_init (void) 
 {
@@ -13,8 +152,11 @@ syscall_init (void)
 }
 
 static void
-syscall_handler (struct intr_frame *f UNUSED) 
+syscall_handler (struct intr_frame *f) 
 {
-  printf ("system call!\n");
+  uint32_t syscall_num = *(uint32_t*)f->esp;
+  printf ("system call: %d\n", syscall_num);
+  handlers[syscall_num](f);
   process_exit (PROC_ERR);
 }
+
