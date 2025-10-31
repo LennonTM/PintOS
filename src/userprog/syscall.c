@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <syscall-nr.h>
 #include "devices/shutdown.h"
+#include "filesys/filesys.h"
 
 static void syscall_handler (struct intr_frame *);
 
@@ -51,18 +52,24 @@ handle_wait (struct intr_frame *f) {
   printf("Handler: handle_wait  called\n");
 }
 
-
+/* Creates a new file called file initially initial_size bytes in size.
+   Returns ture if successful, false otherwise. Creating a new file does
+   not open it. */
 static bool 
-create (const char *file, unsigned initial_size);
+create (const char *file, unsigned initial_size) {
+  return filesys_create(file, initial_size);
+}
 
 static void
 handle_create (struct intr_frame *f) {
   printf("Handler: handle_create  called\n");
 }
 
-
+/* Deletes the file called file. Returns true if successful, false otherwise.*/
 static bool 
-remove (const char *file);
+remove (const char *file) {
+  return filesys_remove(file);
+}
 
 static void
 handle_remove (struct intr_frame *f) {
