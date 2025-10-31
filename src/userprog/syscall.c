@@ -3,6 +3,7 @@
 #include "threads/interrupt.h"
 #include <stdio.h>
 #include <syscall-nr.h>
+#include "devices/shutdown.h"
 
 static void syscall_handler (struct intr_frame *);
 
@@ -12,11 +13,14 @@ static void syscall_handler (struct intr_frame *);
 typedef void (*handle_syscall)(struct intr_frame *f);
 
 static void 
-halt (void) NO_RETURN;
+halt (void) {
+  shutdown_power_off();
+}
 
 static void
 handle_halt(struct intr_frame *f) {
   printf("Handler: handle_halt called\n");
+  halt();
 }
 
 
