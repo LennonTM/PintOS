@@ -12,6 +12,7 @@ static void syscall_handler (struct intr_frame *);
    and calls corresponding system call implementation */
 typedef void (*handle_syscall)(struct intr_frame *f);
 
+/* Terminates PintOS by calling shutdown_power_off */
 static void 
 halt (void) {
   shutdown_power_off();
