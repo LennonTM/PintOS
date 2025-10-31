@@ -87,7 +87,7 @@ process_init (struct thread *t)
 static void write_int_to_stack(void **esp, int n) {
   int *esp_int = (int *)*esp;
   *esp_int = n;
-  *esp += sizeof(n);
+  *esp = (char *)(*esp) + sizeof(n);
 }
 /* writes string to stack and increments the esp
    unlike pushing to the stack, this grows upwards*/
@@ -95,13 +95,14 @@ static void write_string_to_stack(void **esp, char *str) {
   char *esp_str = (char *)*esp;
   int str_len = strlen(str);
   strlcpy(esp_str, str, str_len);
-  *esp += (str_len + 1) * sizeof(char);
+  *esp = (char *)(*esp) + (str_len + 1) * sizeof(char);
 }
 /* writes pointer to stack and increments the esp
    unlike pushing to the stack, this grows upwards*/
 static void write_pointer_to_stack(void **esp, void *ptr) {
-  *esp = ptr;
-  *esp += sizeof(ptr);
+  void **esp_ptr = (void **)*esp;
+  *esp_ptr = ptr;
+  *esp = (char *)(*esp) + sizeof(ptr);
 }
 
 
@@ -162,13 +163,6 @@ start_process (void *args_)
       success = load (file_name, &if_.eip, &if_.esp);
     }
 
-  /* After loading, we are done with the command-line copy passed to us by process_execute. */
-  palloc_free_page (file_name);
-  
-  /* If load failed, terminate the process. */
-  if (!success) 
-    process_exit (PROC_ERR);
-
   /* push arguments onto the stack */
   /* space to allocate to argument strings is equal to 
    * (args_len - space_count) characters and argc null terminals */
@@ -187,7 +181,7 @@ start_process (void *args_)
 
   /* We tokenise the cmd line and write the 
      token and their pointer to the stack */
-  for (; token != NULL; strtok_r (NULL, " ", &save_ptr)) {
+  for (; token != NULL; token = strtok_r (NULL, " ", &save_ptr)) {
     write_pointer_to_stack(&esp_ptr, &esp_str);
     write_string_to_stack (&esp_str, token);
   }
@@ -199,6 +193,12 @@ start_process (void *args_)
   write_int_to_stack(&esp_cpy, argc);
   write_pointer_to_stack(&esp_cpy, esp_ptr_cpy);
 
+  /* After loading, we are done with the command-line copy passed to us by process_execute. */
+  palloc_free_page (args_);
+
+    /* If load failed, terminate the process. */
+  if (!success) 
+    process_exit (PROC_ERR);
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
