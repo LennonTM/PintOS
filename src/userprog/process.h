@@ -2,6 +2,7 @@
 #define USERPROG_PROCESS_H
 
 #include "threads/thread.h"
+#include "list.h"
 
 #define PROC_SUCC (0)  /* Exit code for normal process termination. */
 #define PROC_ERR (-1)  /* Exit code for erroneous process termination. */
@@ -11,6 +12,7 @@ struct process
   {
     uint32_t *pagedir;      /* Process page directory. */
     struct thread *thread;  /* Process underlying kernel thread. */
+    struct list fd_table;   /* List of file descriptors to file structs. */
   };
 
 void root_process_init (void);
