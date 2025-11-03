@@ -233,7 +233,7 @@ int
 process_wait (tid_t child_tid UNUSED) 
 {
   /* Stub for process_wait */
-  timer_msleep(10 * 1000);
+  timer_msleep(3 * 1000);
   return PROC_ERR;
 }
 

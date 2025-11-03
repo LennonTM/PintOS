@@ -26,14 +26,18 @@ handle_halt(struct intr_frame *f) {
 }
 
 
-static void 
-exit (int status) NO_RETURN;
+static void NO_RETURN
+exit (int status) {
+  char *process_name = thread_current()->name;
+  printf ("%s: exit(%d)\n", process_name, status);
+  process_exit (PROC_SUCC);
+}
 
 static void 
 handle_exit (struct intr_frame *f) {
   printf("Handler: handle_exit  called\n");
+  exit(-1);
 }
-
 
 static pid_t 
 exec (const char *file);
@@ -169,6 +173,5 @@ syscall_handler (struct intr_frame *f)
   uint32_t syscall_num = *(uint32_t*)f->esp;
   printf ("system call: %d\n", syscall_num);
   handlers[syscall_num](f);
-  process_exit (PROC_ERR);
 }
 
