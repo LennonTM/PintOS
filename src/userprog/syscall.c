@@ -6,12 +6,22 @@
 #include "devices/shutdown.h"
 #include "filesys/filesys.h"
 
+/* A entry in the fd_table. */
+struct fd_entry
+  {
+    int fd; /* File descriptor. */
+    struct file* file; /* File which can be handled by file.c. */
+    struct list_elem elem; /* List element for doubly-linked td_table list. */
+  };
+
+
 static void syscall_handler (struct intr_frame *);
 
 /* Type of a specific system call handler helper function
    Each handler takes the frame, gets the arguments
    and calls corresponding system call implementation */
 typedef void (*handle_syscall)(struct intr_frame *f);
+
 
 /* Terminates PintOS by calling shutdown_power_off */
 static void 
