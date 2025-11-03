@@ -9,7 +9,7 @@ static void syscall_handler (struct intr_frame *);
 /* Type of a specific system call handler helper function
    Each handler takes the frame, gets the arguments
    and calls corresponding system call implementation */
-typedef void (*handle_syscall)(struct intr_frame *f);
+typedef void (*handle_syscall)(uint8_t *esp, uint32_t *eax);
 
 /* Reads a byte at user virtual address UADDR.
    UADDR must be below PHYS_BASE.
@@ -40,11 +40,38 @@ put_user (uint8_t *udst, uint8_t byte)
   return error_code != -1;
 }
 
+#define BYTE_SIZE 8
+#define WORD_BYTES (sizeof(uint32_t)/sizeof(uint8_t))
+
+static bool
+get_user_word (const uint8_t *uaddr, uint32_t *result) {
+  *result = 0;
+  for (size_t i = 0; i < WORD_BYTES; i++) {
+    int byte = get_user(uaddr + i);
+    if (byte == -1) {
+      return false;
+    }
+    *result |= (byte << (i * sizeof(uint8_t) * 8));
+  }
+  return true;
+}
+
+static uint32_t
+parse_argument (uint8_t ** uaddr) {
+  uint32_t result;
+  if (!get_user_word(*uaddr, &result)) {
+    process_exit(-1);
+    NOT_REACHED ();
+  }
+  *uaddr += WORD_BYTES;
+  return result;
+}
+
 static void 
 halt (void) NO_RETURN;
 
 static void
-handle_halt(struct intr_frame *f) {
+handle_halt(uint8_t *esp UNUSED, uint32_t *eax UNUSED) {
   printf("Handler: handle_halt called\n");
 }
 
@@ -53,8 +80,10 @@ static void
 exit (int status) NO_RETURN;
 
 static void 
-handle_exit (struct intr_frame *f) {
+handle_exit (uint8_t *esp, uint32_t *eax UNUSED) {
   printf("Handler: handle_exit  called\n");
+  int status = (int) parse_argument(&esp);
+  exit(status);
 }
 
 
@@ -62,7 +91,10 @@ static pid_t
 exec (const char *file);
 
 static void
-handle_exec (struct intr_frame *f) {
+handle_exec (uint8_t *esp, uint32_t *eax UNUSED) {
+  char *file = (char *) parse_argument(&esp);
+  pid_t res = exec(file);
+  *eax = res;
   printf("Handler: handle_exec  called\n");
 }
 
@@ -71,7 +103,9 @@ static int
 wait (pid_t wait_pid);
 
 static void
-handle_wait (struct intr_frame *f) {
+handle_wait (uint8_t *esp, uint32_t *eax) {
+  pid_t wait_pid = (pid_t) parse_argument(&esp);
+  *eax = wait(wait_pid);
   printf("Handler: handle_wait  called\n");
 }
 
@@ -80,7 +114,10 @@ static bool
 create (const char *file, unsigned initial_size);
 
 static void
-handle_create (struct intr_frame *f) {
+handle_create (uint8_t *esp, uint32_t *eax) {
+  char *file = (char *) parse_argument(&esp);
+  unsigned initial_size = (unsigned) parse_argument(&esp);
+  *eax = create(file, initial_size);
   printf("Handler: handle_create  called\n");
 }
 
@@ -89,7 +126,9 @@ static bool
 remove (const char *file);
 
 static void
-handle_remove (struct intr_frame *f) {
+handle_remove (uint8_t *esp, uint32_t *eax) {
+  char *file = (char *) parse_argument(&esp);
+  *eax = remove(file);
   printf("Handler: handle_remove  called\n");
 }
 
@@ -98,7 +137,9 @@ static int
 open (const char *file);
 
 static void
-handle_open (struct intr_frame *f) {
+handle_open (uint8_t *esp, uint32_t *eax) {
+  char *file = (char *) parse_argument(&esp);
+  *eax = open(file);
   printf("Handler: handle_open  called\n");
 }
 
@@ -107,7 +148,9 @@ static int
 filesize (int fd);
 
 static void
-handle_filesize (struct intr_frame *f) {
+handle_filesize (uint8_t *esp, uint32_t *eax) {
+  int fd = (int) parse_argument(&esp);
+  *eax = filesize(fd);
   printf("Handler: handle_filesize  called\n");
 }
 
@@ -116,7 +159,7 @@ static int
 read (int fd, void *buffer, unsigned length);
 
 static void
-handle_read (struct intr_frame *f) {
+handle_read (uint8_t *esp, uint32_t *eax) {
   printf("Handler: handle_read  called\n");
 }
 
@@ -125,7 +168,7 @@ static int
 write (int fd, const void *buffer, unsigned length);
 
 static void
-handle_write (struct intr_frame *f) {
+handle_write (uint8_t *esp, uint32_t *eax) {
   printf("Handler: handle_write  called\n");
 }
 
@@ -134,7 +177,7 @@ static void
 seek (int fd, unsigned position);
 
 static void
-handle_seek (struct intr_frame *f) {
+handle_seek (uint8_t *esp, uint32_t *eax) {
   printf("Handler: handle_seek  called\n");
 }
 
@@ -143,7 +186,7 @@ static unsigned
 tell (int fd);
 
 static void
-handle_tell (struct intr_frame *f) {
+handle_tell (uint8_t *esp, uint32_t *eax) {
   printf("Handler: handle_tell  called\n");
 }
 
@@ -152,7 +195,7 @@ static void
 close (int fd);
 
 static void
-handle_close (struct intr_frame *f) {
+handle_close (uint8_t *esp, uint32_t *eax) {
   printf("Handler: handle_close  called\n");
 }
 
@@ -185,7 +228,7 @@ syscall_handler (struct intr_frame *f)
 {
   uint32_t syscall_num = *(uint32_t*)f->esp;
   printf ("system call: %d\n", syscall_num);
-  handlers[syscall_num](f);
+  handlers[syscall_num](f->esp, &f->eax);
   process_exit (PROC_ERR);
 }
 
