@@ -86,6 +86,7 @@ process_init (struct thread *t)
   /* Initialise process attributes. */
   process->pagedir = NULL;
   process->thread = t;
+  process->recover_flag = false;
   
   /* Link thread to its process. */
   t->process = process;

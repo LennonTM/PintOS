@@ -19,8 +19,10 @@ static int
 get_user (const uint8_t *uaddr)
 {
   int result;
+  thread_current()->process->recover_flag = true;
   asm ("movl $1f, %0; movzbl %1, %0; 1:"
        : "=&a" (result) : "m" (*uaddr));
+  thread_current()->process->recover_flag = false;
   return result;
 }
 
@@ -31,8 +33,10 @@ static bool
 put_user (uint8_t *udst, uint8_t byte)
 {
   int error_code;
+  thread_current()->process->recover_flag = true;
   asm ("movl $1f, %0; movb %b2, %1; 1:"
        : "=&a" (error_code), "=m" (*udst) : "q" (byte));
+  thread_current()->process->recover_flag = false;
   return error_code != -1;
 }
 

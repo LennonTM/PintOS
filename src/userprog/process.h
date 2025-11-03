@@ -11,6 +11,9 @@ struct process
   {
     uint32_t *pagedir;      /* Process page directory. */
     struct thread *thread;  /* Process underlying kernel thread. */
+    bool recover_flag;      /* Indicates whether the page fault
+                               needs to be recovered from, without
+                               causing kernel panic */
   };
 
 void root_process_init (void);
