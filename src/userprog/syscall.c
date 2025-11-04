@@ -73,6 +73,23 @@ parse_argument (uint8_t ** uaddr) {
   return result;
 }
 
+static bool
+check_valid_string(const char *string) {
+  const uint8_t *p = string;
+  int byte;
+  while ((void *) p < PHYS_BASE) {
+    byte = get_user(p);
+    if (byte == -1) {
+      return false;
+    }
+    if (byte == '\0') {
+      return true;
+    }
+    p++;
+  }
+  return false;
+}
+
 /* Terminates PintOS by calling shutdown_power_off */
 static void 
 halt (void) {
@@ -137,8 +154,10 @@ static void
 handle_create (uint8_t *esp, uint32_t *eax) {
   char *file = (char *) parse_argument(&esp);
   unsigned initial_size = (unsigned) parse_argument(&esp);
+  if (!check_valid_string(file)) {
+    exit(PROC_ERR);
+  }
   *eax = create(file, initial_size);
-  printf("Handler: handle_create  called\n");
 }
 
 /* Deletes the file called file. Returns true if successful, false otherwise.*/
