@@ -3,6 +3,8 @@
 #include "threads/interrupt.h"
 #include <stdio.h>
 #include <syscall-nr.h>
+#include "devices/shutdown.h"
+#include "filesys/filesys.h"
 
 static void syscall_handler (struct intr_frame *);
 
@@ -67,18 +69,24 @@ parse_argument (uint8_t ** uaddr) {
   return result;
 }
 
+/* Terminates PintOS by calling shutdown_power_off */
 static void 
-halt (void) NO_RETURN;
+halt (void) {
+  shutdown_power_off();
+}
 
 static void
 handle_halt(uint8_t *esp UNUSED, uint32_t *eax UNUSED) {
   printf("Handler: handle_halt called\n");
+  halt();
 }
 
 
 static void NO_RETURN
 exit (int status) {
-
+  char *process_name = thread_current()->name;
+  printf ("%s: exit(%d)\n", process_name, status);
+  process_exit (PROC_SUCC);
 }
 
 static void 
@@ -87,7 +95,6 @@ handle_exit (uint8_t *esp, uint32_t *eax UNUSED) {
   int status = (int) parse_argument(&esp);
   exit(status);
 }
-
 
 static pid_t 
 exec (const char *file) {
@@ -115,10 +122,12 @@ handle_wait (uint8_t *esp, uint32_t *eax) {
   printf("Handler: handle_wait  called\n");
 }
 
-
+/* Creates a new file called file initially initial_size bytes in size.
+   Returns ture if successful, false otherwise. Creating a new file does
+   not open it. */
 static bool 
 create (const char *file, unsigned initial_size) {
-
+  return filesys_create(file, initial_size);
 }
 
 static void
@@ -129,10 +138,10 @@ handle_create (uint8_t *esp, uint32_t *eax) {
   printf("Handler: handle_create  called\n");
 }
 
-
+/* Deletes the file called file. Returns true if successful, false otherwise.*/
 static bool 
 remove (const char *file) {
-
+  return filesys_remove(file);
 }
 
 static void
@@ -240,7 +249,6 @@ syscall_handler (struct intr_frame *f)
 {
   uint32_t syscall_num = *(uint32_t*)f->esp;
   printf ("system call: %d\n", syscall_num);
-  handlers[syscall_num](f->esp, &f->eax);
-  process_exit (PROC_ERR);
+  handlers[syscall_num](f);
 }
 
