@@ -66,7 +66,7 @@ static uint32_t
 parse_argument (uint8_t ** uaddr) {
   uint32_t result;
   if (!get_user_word(*uaddr, &result)) {
-    exit(-1);
+    exit(PROC_ERR);
     NOT_REACHED ();
   }
   *uaddr += WORD_BYTES;
