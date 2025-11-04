@@ -6,6 +6,7 @@
 #include "devices/shutdown.h"
 #include "filesys/filesys.h"
 #include "filesys/file.h"
+#include "threads/malloc.h"
 
 /* A entry in the fd_table. */
 struct fd_entry
@@ -91,11 +92,11 @@ handle_remove (struct intr_frame *f) {
   printf("Handler: handle_remove  called\n");
 }
 
-#ifdef USERPROG
+
 
 /* The first user file descriptor is 2 since 0 and 1 are used
    for the console. */
-#define USER_FIRST_FD 2;
+#define USER_FIRST_FD 2
 
 /* Retrives the struct file of the file descriptor (fd) of the 
    current process.*/
@@ -114,7 +115,7 @@ get_file (int fd) {
     if (entry->fd == fd) {
       /* As an invariant there should be only one file of a given fd. */
       ASSERT (to_return == NULL);
-      to_return = entry;
+      to_return = entry->file;
     }
   }
   ASSERT (to_return != NULL);
@@ -130,7 +131,7 @@ add_file (struct file* file_) {
      we choose the next fd as this should not have been chosen already. In the
      case where fd_table is empty the only file_descriptors are 0/1 for
      the console. */
-  int fd = ?(list_empty (fd_table)) USER_FIRST_FD : 
+  int fd = list_empty (fd_table) ? USER_FIRST_FD : 
     list_entry(list_back(fd_table), struct fd_entry, elem)->fd + 1;
   struct fd_entry* entry =  malloc (sizeof(struct fd_entry));
   entry->fd = fd;
@@ -139,7 +140,7 @@ add_file (struct file* file_) {
   return fd;
 }
 
-#endif
+
 
 /* Opens the file called file. Returns non-negative integer handle called
    file descriptor (fd) or -1 if file could not be opened. A fd of 1 or
