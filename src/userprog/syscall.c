@@ -197,7 +197,7 @@ read (int fd, void *buffer, unsigned length) {
   ASSERT (fd != STDOUT_FILENO);
   if (fd == STDIN_FILENO) {
     char* buffer_ = (char*) buffer;
-    for (int i = 0; i<length; i++) {
+    for (unsigned i = 0; i<length; i++) {
       *buffer_++ = input_getc();
     }
     return length;
