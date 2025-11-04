@@ -6,6 +6,19 @@
 #include "devices/shutdown.h"
 #include "filesys/filesys.h"
 #include "threads/vaddr.h"
+#include "filesys/file.h"
+#include "threads/malloc.h"
+#include "devices/input.h"
+#include "lib/stdio.h"
+
+/* A entry in the fd_table. */
+struct fd_entry
+  {
+    int fd; /* File descriptor. */
+    struct file* file; /* File which can be handled by file.c. */
+    struct list_elem elem; /* List element for doubly-linked td_table list. */
+  };
+
 
 static void syscall_handler (struct intr_frame *);
 
@@ -90,6 +103,7 @@ check_valid_string(const char *string) {
   return false;
 }
 
+
 /* Terminates PintOS by calling shutdown_power_off */
 static void 
 halt (void) {
@@ -173,11 +187,82 @@ handle_remove (uint8_t *esp, uint32_t *eax) {
   printf("Handler: handle_remove  called\n");
 }
 
+/* The first user file descriptor is 2 since 0 and 1 are used
+   for the console. */
+#define USER_FIRST_FD 2
+/* Retrives the struct file of the file descriptor (fd) of the 
+   current process.*/
+static struct file*
+get_file (int fd) {
+  struct file* to_return = NULL;
+  struct list* fd_table = thread_current ()->process->fd_table;
+  /* Iterates through the fd_table of the current process, and gets the 
+     struct file of file descriptor fd. */
+  for (
+      struct list_elem *e = list_begin (fd_table); 
+      e != list_end (fd_table); 
+      e = list_next (e))
+  {
+    struct fd_entry *entry = list_entry (e, struct fd_entry, elem);
+    if (entry->fd == fd) {
+      /* As an invariant there should be only one file of a given fd. */
+      ASSERT (to_return == NULL);
+      to_return = entry->file;
+    }
+  }
+  ASSERT (to_return != NULL);
+  return to_return;
+}
 
+/* Adds file to the file descriptor table, returns the file descriptor that
+   the file is stored under. */
+static int
+add_file (struct file* file_) {
+  struct list* fd_table = thread_current ()->process->fd_table;
+  /* As an invariant the last element in fd_table has the largest fd thus
+     we choose the next fd as this should not have been chosen already. In the
+     case where fd_table is empty the only file_descriptors are 0/1 for
+     the console. */
+  int fd = list_empty (fd_table) ? USER_FIRST_FD : 
+    list_entry(list_back(fd_table), struct fd_entry, elem)->fd + 1;
+  struct fd_entry* entry =  malloc (sizeof(struct fd_entry));
+  entry->fd = fd;
+  entry->file = file_;
+  list_push_back(fd_table, &entry->elem);
+  return fd;
+}
+
+/* Removes the file from the file descriptor table. */
+static void
+remove_file (struct file* file_) {
+  struct list* fd_table = thread_current ()->process->fd_table;
+  /* Iterates through the fd_table of the current process, and removes
+     entries which have file file_*/
+  for (
+      struct list_elem *e = list_begin (fd_table); 
+      e != list_end (fd_table); 
+      e = list_next (e))
+  {
+    struct fd_entry *entry = list_entry (e, struct fd_entry, elem);
+    if (entry->file == file_) {
+      list_remove (e);
+      return;
+    }
+  }
+}
+
+
+/* Opens the file called file. Returns non-negative integer handle called
+   file descriptor (fd) or -1 if file could not be opened. A fd of 1 or
+   0 is reserved for the console. */
 static int 
 open (const char *file) {
-  printf("Handler: handle_open  called\n");
+  struct file* file_ = filesys_open(file);
+  if (file_ == NULL)
+    return -1;
+  return add_file (file_);
 }
+
 
 static void
 handle_open (uint8_t *esp, uint32_t *eax) {
@@ -185,10 +270,12 @@ handle_open (uint8_t *esp, uint32_t *eax) {
   *eax = open(file);
 }
 
-
+/* Returns the size, in bytes, of the file open as fd. */
 static int 
 filesize (int fd) {
-  printf("Handler: handle_filesize  called\n");
+  ASSERT ((fd != STDIN_FILENO) && (fd != STDOUT_FILENO));
+  struct file *file_ = get_file (fd);
+  return file_length (file_);
 }
 
 static void
@@ -197,23 +284,52 @@ handle_filesize (uint8_t *esp, uint32_t *eax) {
   *eax = filesize(fd);
 }
 
-
+/* Reads size bytes from the file open as fd into buffer. Returns
+   number of bytes actually read. Returns -1 if there is an error
+   in getting open file.*/
 static int 
-read (int fd, void *buffer, unsigned length);
+read (int fd, void *buffer, unsigned length) {
+  ASSERT (fd != STDOUT_FILENO);
+  if (fd == STDIN_FILENO) {
+    char* buffer_ = (char*) buffer;
+    for (unsigned i = 0; i<length; i++) {
+      *buffer_++ = input_getc();
+    }
+    return length;
+  }
+  else {
+    struct file* file_ = get_file (fd);
+    if (file_ == NULL)
+      return -1;
+    return file_read (file_, buffer, length);
+  }
+}
 
 static void
 handle_read (uint8_t *esp, uint32_t *eax) {
   printf("Handler: handle_read  called\n");
 }
 
+#define MAX_WRITE_LENGTH 256
 
+/* Writes size bytes from buffer to open file fd. Returns number of bytes
+   actually written.*/
 static int 
 write (int fd, const void *buffer, unsigned length) {
-  if (fd == 1) {
-    /* Write to standard output */
-    putbuf(buffer, length);
-  } else {
-    printf("Writing to file fd: %d\n", fd);
+  ASSERT (fd != STDIN_FILENO);
+  if (fd == STDOUT_FILENO) {
+    for (int char_left = length; char_left > 0; char_left -= MAX_WRITE_LENGTH)
+    {
+      size_t put_length = 
+        (char_left < MAX_WRITE_LENGTH) ? char_left : MAX_WRITE_LENGTH;
+      putbuf(buffer, put_length);
+    }
+    return length;
+  }
+  else {
+    struct file* file_ = get_file (fd);
+    ASSERT (file_ != NULL);
+    return file_write(file_, buffer, length);
   }
 }
 
@@ -225,27 +341,40 @@ handle_write (uint8_t *esp, uint32_t *eax) {
   *eax = write(fd, buffer, length);
 }
 
-
+/* Changes the next byte to be read or written in open file fd to position. 
+   Expressed in bytes from the beginning of the file. */
 static void 
-seek (int fd, unsigned position);
+seek (int fd, unsigned position) {
+  struct file* file_ = get_file (fd);
+  file_seek (file_, position);
+}
 
 static void
 handle_seek (uint8_t *esp, uint32_t *eax) {
   printf("Handler: handle_seek  called\n");
 }
 
-
+/* Returns the position of the next byte to be read or written in open file
+   fd, expressed in bytes from beginning of the file. */
 static unsigned 
-tell (int fd);
+tell (int fd) {
+  struct file* file_ = get_file (fd);
+  return file_tell (file_);
+}
 
 static void
 handle_tell (uint8_t *esp, uint32_t *eax) {
   printf("Handler: handle_tell  called\n");
 }
 
-
+/* Removes file descriptor fd from the fd_table and closes its file. */
 static void 
-close (int fd);
+close (int fd) {
+  ASSERT ((fd != STDIN_FILENO) && (fd != STDOUT_FILENO));
+  struct file* file_ = get_file (fd);
+  remove_file (file_);
+  file_close (file_);
+}
 
 static void
 handle_close (uint8_t *esp, uint32_t *eax) {

@@ -2,6 +2,7 @@
 #define USERPROG_PROCESS_H
 
 #include "threads/thread.h"
+#include "list.h"
 
 #define PROC_SUCC (0)  /* Exit code for normal process termination. */
 #define PROC_ERR (-1)  /* Exit code for erroneous process termination. */
@@ -14,6 +15,7 @@ struct process
     bool recover_flag;      /* Indicates whether the page fault
                                needs to be recovered from, without
                                causing kernel panic */
+    struct list *fd_table;   /* List of file descriptors to file structs. */
   };
 
 void root_process_init (void);

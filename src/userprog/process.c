@@ -87,6 +87,8 @@ process_init (struct thread *t)
   process->pagedir = NULL;
   process->thread = t;
   process->recover_flag = false;
+  process->fd_table = malloc (sizeof(struct list *));
+  list_init(process->fd_table);
   
   /* Link thread to its process. */
   t->process = process;
