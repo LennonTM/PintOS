@@ -139,6 +139,24 @@ add_file (struct file* file_) {
   return fd;
 }
 
+/* Removes the file from the file descriptor table. */
+static void
+remove_file (struct file* file_) {
+  struct list* fd_table = thread_current ()->process->fd_table;
+  /* Iterates through the fd_table of the current process, and removes
+     entries which have file file_*/
+  for (
+      struct list_elem *e = list_begin (fd_table); 
+      e != list_end (fd_table); 
+      e = list_next (e))
+  {
+    struct fd_entry *entry = list_entry (e, struct fd_entry, elem);
+    if (entry->file == file_) {
+      list_remove (e);
+      return;
+    }
+  }
+}
 
 
 /* Opens the file called file. Returns non-negative integer handle called
@@ -249,9 +267,14 @@ handle_tell (struct intr_frame *f) {
   printf("Handler: handle_tell  called\n");
 }
 
-
+/* Removes file descriptor fd from the fd_table and closes its file. */
 static void 
-close (int fd);
+close (int fd) {
+  ASSERT ((fd != STDIN_FILENO) && (fd != STDOUT_FILENO));
+  struct file* file_ = get_file (fd);
+  remove_file (file_);
+  file_close (file_);
+}
 
 static void
 handle_close (struct intr_frame *f) {
