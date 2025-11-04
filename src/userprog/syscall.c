@@ -267,6 +267,8 @@ open (const char *file) {
 static void
 handle_open (uint8_t *esp, uint32_t *eax) {
   char *file = (char *) parse_argument(&esp);
+  if (file == NULL)
+    exit(PROC_ERR);
   *eax = open(file);
 }
 
