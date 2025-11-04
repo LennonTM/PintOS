@@ -196,9 +196,26 @@ handle_read (struct intr_frame *f) {
   printf("Handler: handle_read  called\n");
 }
 
+#define MAX_WRITE_LENGTH 256
 
+/* Writes size bytes from buffer to open file fd. Returns number of bytes
+   actually written.*/
 static int 
-write (int fd, const void *buffer, unsigned length);
+write (int fd, const void *buffer, unsigned length) {
+  ASSERT (fd != STDIN_FILENO);
+  if (fd == STDOUT_FILENO) {
+    for (int char_left = length; char_left > 0; char_left -= MAX_WRITE_LENGTH)
+    {
+      putbuf(buffer, MAX_WRITE_LENGTH);
+    }
+    return length;
+  }
+  else {
+    struct file* file_ = get_file (fd);
+    ASSERT (file_ != NULL);
+    return file_write(file_, buffer, length);
+  }
+}
 
 static void
 handle_write (struct intr_frame *f) {
