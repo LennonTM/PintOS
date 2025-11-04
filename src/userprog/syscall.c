@@ -138,8 +138,16 @@ add_file (struct file* file_) {
 
 #endif
 
+/* Opens the file called file. Returns non-negative integer handle called
+   file descriptor (fd) or -1 if file could not be opened. A fd of 1 or
+   0 is reserved for the console. */
 static int 
-open (const char *file);
+open (const char *file) {
+  struct file* file_ = filesys_open(file);
+  if (file_ == NULL)
+    return -1;
+  return add_file (file_);
+}
 
 
 static void
