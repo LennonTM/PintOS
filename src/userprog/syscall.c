@@ -5,6 +5,7 @@
 #include <syscall-nr.h>
 #include "devices/shutdown.h"
 #include "filesys/filesys.h"
+#include "threads/vaddr.h"
 
 static void syscall_handler (struct intr_frame *);
 
@@ -51,8 +52,9 @@ static bool
 get_user_word (const uint8_t *uaddr, uint32_t *result) {
   *result = 0;
   for (size_t i = 0; i < WORD_BYTES; i++) {
-    int byte = get_user(uaddr + i);
-    if (byte == -1) {
+    const uint8_t *byte_addr = uaddr + i;
+    int byte = get_user(byte_addr);
+    if ((void *) byte_addr >= PHYS_BASE || byte == -1) {
       return false;
     }
     *result |= (byte << (i * sizeof(uint8_t) * 8));
