@@ -76,8 +76,10 @@ handle_halt(uint8_t *esp UNUSED, uint32_t *eax UNUSED) {
 }
 
 
-static void 
-exit (int status) NO_RETURN;
+static void NO_RETURN
+exit (int status) {
+
+}
 
 static void 
 handle_exit (uint8_t *esp, uint32_t *eax UNUSED) {
@@ -88,7 +90,9 @@ handle_exit (uint8_t *esp, uint32_t *eax UNUSED) {
 
 
 static pid_t 
-exec (const char *file);
+exec (const char *file) {
+
+}
 
 static void
 handle_exec (uint8_t *esp, uint32_t *eax UNUSED) {
@@ -100,7 +104,9 @@ handle_exec (uint8_t *esp, uint32_t *eax UNUSED) {
 
 
 static int 
-wait (pid_t wait_pid);
+wait (pid_t wait_pid) {
+
+}
 
 static void
 handle_wait (uint8_t *esp, uint32_t *eax) {
@@ -111,7 +117,9 @@ handle_wait (uint8_t *esp, uint32_t *eax) {
 
 
 static bool 
-create (const char *file, unsigned initial_size);
+create (const char *file, unsigned initial_size) {
+
+}
 
 static void
 handle_create (uint8_t *esp, uint32_t *eax) {
@@ -123,7 +131,9 @@ handle_create (uint8_t *esp, uint32_t *eax) {
 
 
 static bool 
-remove (const char *file);
+remove (const char *file) {
+
+}
 
 static void
 handle_remove (uint8_t *esp, uint32_t *eax) {
@@ -134,24 +144,26 @@ handle_remove (uint8_t *esp, uint32_t *eax) {
 
 
 static int 
-open (const char *file);
+open (const char *file) {
+  printf("Handler: handle_open  called\n");
+}
 
 static void
 handle_open (uint8_t *esp, uint32_t *eax) {
   char *file = (char *) parse_argument(&esp);
   *eax = open(file);
-  printf("Handler: handle_open  called\n");
 }
 
 
 static int 
-filesize (int fd);
+filesize (int fd) {
+  printf("Handler: handle_filesize  called\n");
+}
 
 static void
 handle_filesize (uint8_t *esp, uint32_t *eax) {
   int fd = (int) parse_argument(&esp);
   *eax = filesize(fd);
-  printf("Handler: handle_filesize  called\n");
 }
 
 
