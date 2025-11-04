@@ -5,6 +5,7 @@
 #include <syscall-nr.h>
 #include "devices/shutdown.h"
 #include "filesys/filesys.h"
+#include "filesys/file.h"
 
 /* A entry in the fd_table. */
 struct fd_entry
@@ -157,9 +158,12 @@ handle_open (struct intr_frame *f) {
   printf("Handler: handle_open  called\n");
 }
 
-
+/* Returns the size, in bytes, of the file open as fd. */
 static int 
-filesize (int fd);
+filesize (int fd) {
+  struct file *file_ = get_file (fd);
+  return file_length (file_);
+}
 
 static void
 handle_filesize (struct intr_frame *f) {
