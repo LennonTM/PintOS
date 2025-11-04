@@ -7,6 +7,8 @@
 #include "filesys/filesys.h"
 #include "filesys/file.h"
 #include "threads/malloc.h"
+#include "devices/input.h"
+#include "lib/stdio.h"
 
 /* A entry in the fd_table. */
 struct fd_entry
@@ -92,12 +94,9 @@ handle_remove (struct intr_frame *f) {
   printf("Handler: handle_remove  called\n");
 }
 
-
-
 /* The first user file descriptor is 2 since 0 and 1 are used
    for the console. */
 #define USER_FIRST_FD 2
-
 /* Retrives the struct file of the file descriptor (fd) of the 
    current process.*/
 static struct file*
@@ -171,9 +170,26 @@ handle_filesize (struct intr_frame *f) {
   printf("Handler: handle_filesize  called\n");
 }
 
-
+/* Reads size bytes from the file open as fd into buffer. Returns
+   number of bytes actually read. Returns -1 if there is an error
+   in getting open file.*/
 static int 
-read (int fd, void *buffer, unsigned length);
+read (int fd, void *buffer, unsigned length) {
+  ASSERT (fd != STDOUT_FILENO);
+  if (fd == STDIN_FILENO) {
+    char* buffer_ = (char*) buffer;
+    for (int i = 0; i<length; i++) {
+      *buffer_++ = input_getc();
+    }
+    return length;
+  }
+  else {
+    struct file* file_ = get_file (fd);
+    if (file_ == NULL)
+      return -1;
+    return file_read (file_, buffer, length);
+  }
+}
 
 static void
 handle_read (struct intr_frame *f) {
