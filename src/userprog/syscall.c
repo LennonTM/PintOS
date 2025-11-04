@@ -13,6 +13,8 @@ static void syscall_handler (struct intr_frame *);
    and calls corresponding system call implementation */
 typedef void (*handle_syscall)(uint8_t *esp, uint32_t *eax);
 
+static void NO_RETURN exit (int status);
+
 /* Reads a byte at user virtual address UADDR.
    UADDR must be below PHYS_BASE.
    Returns the byte value if successful, -1 if a segfault
@@ -62,7 +64,7 @@ static uint32_t
 parse_argument (uint8_t ** uaddr) {
   uint32_t result;
   if (!get_user_word(*uaddr, &result)) {
-    process_exit(-1);
+    exit(-1);
     NOT_REACHED ();
   }
   *uaddr += WORD_BYTES;
@@ -86,12 +88,11 @@ static void NO_RETURN
 exit (int status) {
   char *process_name = thread_current()->name;
   printf ("%s: exit(%d)\n", process_name, status);
-  process_exit (PROC_SUCC);
+  process_exit (status);
 }
 
 static void 
 handle_exit (uint8_t *esp, uint32_t *eax UNUSED) {
-  printf("Handler: handle_exit  called\n");
   int status = (int) parse_argument(&esp);
   exit(status);
 }
@@ -186,11 +187,21 @@ handle_read (uint8_t *esp, uint32_t *eax) {
 
 
 static int 
-write (int fd, const void *buffer, unsigned length);
+write (int fd, const void *buffer, unsigned length) {
+  if (fd == 1) {
+    /* Write to standard output */
+    putbuf(buffer, length);
+  } else {
+    printf("Writing to file fd: %d\n", fd);
+  }
+}
 
 static void
 handle_write (uint8_t *esp, uint32_t *eax) {
-  printf("Handler: handle_write  called\n");
+  int fd = (int) parse_argument(&esp);
+  const void *buffer = (const void *) parse_argument(&esp);
+  unsigned length = (unsigned) parse_argument(&esp);
+  *eax = write(fd, buffer, length);
 }
 
 
@@ -247,8 +258,8 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f) 
 {
-  uint32_t syscall_num = *(uint32_t*)f->esp;
-  printf ("system call: %d\n", syscall_num);
-  handlers[syscall_num](f);
+  uint8_t *esp_cpy = f->esp;
+  uint32_t syscall_num = (uint32_t) parse_argument(&esp_cpy);
+  handlers[syscall_num](esp_cpy, &f->eax);
 }
 
