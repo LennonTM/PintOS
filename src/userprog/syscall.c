@@ -262,6 +262,9 @@ syscall_handler (struct intr_frame *f)
 {
   uint8_t *esp_cpy = f->esp;
   uint32_t syscall_num = (uint32_t) parse_argument(&esp_cpy);
+  if (syscall_num >= TOTAL_SYSCALLS) {
+    exit(PROC_ERR);
+  }
   handlers[syscall_num](esp_cpy, &f->eax);
 }
 
