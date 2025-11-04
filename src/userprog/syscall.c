@@ -90,9 +90,57 @@ handle_remove (struct intr_frame *f) {
   printf("Handler: handle_remove  called\n");
 }
 
+#ifdef USERPROG
+
+/* The first user file descriptor is 2 since 0 and 1 are used
+   for the console. */
+#define USER_FIRST_FD 2;
+
+/* Retrives the struct file of the file descriptor (fd) of the 
+   current process.*/
+static struct file*
+get_file (int fd) {
+  struct file* to_return;
+  struct list* fd_table = thread_current ()->process->fd_table;
+  /* Iterates through the fd_table of the current process, and gets the 
+     struct file of file descriptor fd. */
+  for (
+      struct list_elem *e = list_begin (fd_table); 
+      e != list_end (fd_table); 
+      e = list_next (e))
+  {
+    struct fd_entry *entry = list_entry (e, struct fd_entry, elem);
+    if (entry->fd == fd) {
+      /* As an invariant there should be only one file of a given fd. */
+      ASSERT (to_return == NULL);
+      to_return = entry;
+    }
+  }
+  ASSERT (to_return != NULL);
+  return to_return;
+}
+
+static int
+add_file (struct file* file_) {
+  struct list* fd_table = thread_current ()->process->fd_table;
+  /* As an invariant the last element in fd_table has the largest fd thus
+     we choose the next fd as this should not have been chosen already. In the
+     case where fd_table is empty the only file_descriptors are 0/1 for
+     the console. */
+  int fd = ?(list_empty (fd_table)) USER_FIRST_FD : 
+    list_entry(list_back(fd_table), struct fd_entry, elem)->fd + 1;
+  struct fd_entry* entry =  malloc (sizeof(struct fd_entry));
+  entry->fd = fd;
+  entry->file = file_;
+  list_push_back(fd_table, &entry->elem);
+  return fd;
+}
+
+#endif
 
 static int 
 open (const char *file);
+
 
 static void
 handle_open (struct intr_frame *f) {
