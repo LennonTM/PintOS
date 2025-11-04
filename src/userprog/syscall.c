@@ -120,6 +120,8 @@ get_file (int fd) {
   return to_return;
 }
 
+/* Adds file to the file descriptor table, returns the file descriptor that
+   the file is stored under. */
 static int
 add_file (struct file* file_) {
   struct list* fd_table = thread_current ()->process->fd_table;
