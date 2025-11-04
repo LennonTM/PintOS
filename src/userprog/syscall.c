@@ -161,6 +161,7 @@ handle_open (struct intr_frame *f) {
 /* Returns the size, in bytes, of the file open as fd. */
 static int 
 filesize (int fd) {
+  ASSERT ((fd != STDIN_FILENO) && (fd != STDOUT_FILENO));
   struct file *file_ = get_file (fd);
   return file_length (file_);
 }
