@@ -223,18 +223,26 @@ handle_write (struct intr_frame *f) {
   printf("Handler: handle_write  called\n");
 }
 
-
+/* Changes the next byte to be read or written in open file fd to position. 
+   Expressed in bytes from the beginning of the file. */
 static void 
-seek (int fd, unsigned position);
+seek (int fd, unsigned position) {
+  struct file* file_ = get_file (fd);
+  file_seek (file_, position);
+}
 
 static void
 handle_seek (struct intr_frame *f) {
   printf("Handler: handle_seek  called\n");
 }
 
-
+/* Returns the position of the next byte to be read or written in open file
+   fd, expressed in bytes from beginning of the file. */
 static unsigned 
-tell (int fd);
+tell (int fd) {
+  struct file* file_ = get_file (fd);
+  return file_tell (file_);
+}
 
 static void
 handle_tell (struct intr_frame *f) {
