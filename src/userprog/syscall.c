@@ -308,7 +308,10 @@ read (int fd, void *buffer, unsigned length) {
 
 static void
 handle_read (uint8_t *esp, uint32_t *eax) {
-  printf("Handler: handle_read  called\n");
+  int fd = (int) parse_argument(&esp);
+  void* buffer = (void*) parse_argument(&esp);
+  unsigned length = (unsigned) parse_argument(&esp);
+  *eax = read(fd, buffer, length);
 }
 
 #define MAX_WRITE_LENGTH 256
