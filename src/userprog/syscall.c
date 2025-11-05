@@ -210,7 +210,6 @@ get_file (int fd) {
       to_return = entry->file;
     }
   }
-  ASSERT (to_return != NULL);
   return to_return;
 }
 
