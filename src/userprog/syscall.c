@@ -353,7 +353,9 @@ seek (int fd, unsigned position) {
 
 static void
 handle_seek (uint8_t *esp, uint32_t *eax) {
-  printf("Handler: handle_seek  called\n");
+  int fd = (int) parse_argument(&esp);
+  unsigned position = (unsigned) parse_argument(&esp);
+  seek(fd, position);
 }
 
 /* Returns the position of the next byte to be read or written in open file
@@ -366,7 +368,8 @@ tell (int fd) {
 
 static void
 handle_tell (uint8_t *esp, uint32_t *eax) {
-  printf("Handler: handle_tell  called\n");
+  int fd = (int) parse_argument(&esp);
+  *eax = tell(fd);
 }
 
 /* Removes file descriptor fd from the fd_table and closes its file. */
