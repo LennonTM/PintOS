@@ -59,7 +59,6 @@ put_user (uint8_t *udst, uint8_t byte)
 }
 
 #define BYTE_SIZE 8
-#define WORD_BYTES (sizeof(uint32_t)/sizeof(uint8_t))
 
 static bool
 get_user_word (const uint8_t *uaddr, uint32_t *result) {

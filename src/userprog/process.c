@@ -24,6 +24,9 @@ static bool process_init (struct thread *t);
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
+/* Lock used by allocate_pid(). */
+static struct lock pid_lock;
+
 /* number of bytes to set-up a minimal stack 
    where argv, argc and return address are stored */
 #define MIN_STACK_SIZE 12
@@ -33,11 +36,26 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
 void
 root_process_init (void)
 {
+  lock_init(&pid_lock);
   struct thread *cur = thread_current ();
   bool success = process_init (cur);
   
   if (!success)
     PANIC("Unable to initialise root OS process.");
+}
+
+/* Handles the parent side of initialising a child_process_entry */
+static void
+child_entry_init_parent_side(struct child_process_entry* entry) {
+  /* Parent process needs a pointer to child_process_entry */
+  struct process *parent_process = thread_current()->process;
+  list_push_front(&parent_process->child_entries, &entry->child_entry);
+
+  /* initialise flags, and synchronisation primitives */
+  entry->parent_flag = false;
+  entry->self_flag = false;
+  sema_init(&entry->sema, 0);
+  lock_init(&entry->lock);
 }
 
 /* Starts a new thread running a user program loaded from CMD_LINE.
@@ -46,32 +64,61 @@ root_process_init (void)
 tid_t
 process_execute (const char *cmd_line) 
 {
+  void *ptr_and_cmd_cpy;
   char *cmd_line_copy;
   tid_t tid;
 
+  /* Create child process entry to communicate with the parent */
+  struct child_process_entry* entry = 
+    malloc (sizeof(struct child_process_entry));
+  if (entry == NULL)
+    PANIC("Out of memory");
+  child_entry_init_parent_side(entry);
+
+  /* Allocate a page for */
+  ptr_and_cmd_cpy = palloc_get_page (0);
+  if (ptr_and_cmd_cpy == NULL)
+    return TID_ERROR;
+
+  /* Pointer to child process entry */
+  void **ptr = (void **)ptr_and_cmd_cpy;
+  *ptr = entry;
+
   /* Make a copy of CMD_LINE.
      Otherwise there's a race between the caller and load(). */
-  cmd_line_copy = palloc_get_page (0);
-  if (cmd_line_copy == NULL)
-    return TID_ERROR;
-  strlcpy (cmd_line_copy, cmd_line, PGSIZE);
+  cmd_line_copy = (char *)ptr_and_cmd_cpy + WORD_BYTES;
+  strlcpy (cmd_line_copy, cmd_line, PGSIZE - WORD_BYTES);
 
   /* Threads share a limit of 16 characters */
+  /* Parse thread_name */
   char thread_name[MAX_NAME_LENGTH];
   char *cmd_line_ptr = cmd_line_copy;
   while (*cmd_line_ptr == ' ')
     cmd_line_ptr++;
-
   char *save_ptr;
   strlcpy (thread_name, cmd_line, MAX_NAME_LENGTH);
   strtok_r (thread_name, " ", &save_ptr);
 
   /* Create a new thread to execute CMD_LINE. */
-  tid = thread_create (thread_name, PRI_DEFAULT, start_process, cmd_line_copy);
+  tid = thread_create (thread_name, PRI_DEFAULT, start_process, ptr_and_cmd_cpy);
   if (tid == TID_ERROR)
     palloc_free_page (cmd_line_copy);
     
   return tid;
+}
+
+/* Returns a pid to use for a new process. */
+static pid_t
+allocate_pid (void) 
+{
+  static pid_t next_pid = 1;
+  pid_t pid;
+
+  lock_acquire (&pid_lock);
+  pid = next_pid++;
+  lock_release (&pid_lock);
+
+  return pid;
 }
 
 /* Basic initialisation of a process running on thread T. */
@@ -89,6 +136,10 @@ process_init (struct thread *t)
   process->recover_flag = false;
   process->fd_table = malloc (sizeof(struct list *));
   list_init(process->fd_table);
+
+  /* Initialise process id */
+  process->pid = allocate_pid();
+  list_init(&process->child_entries);
   
   /* Link thread to its process. */
   t->process = process;
@@ -120,13 +171,12 @@ static void write_pointer_to_stack(void **esp, void *ptr) {
 
 
 /* A thread function that loads a user process and starts it
-   running. */
+   running.
+   Args contains a pointer to a child_process_entry followed by cmd_line_cpy */
 static void
 start_process (void *args_)
 {
   struct thread *cur = thread_current ();
-
-  
 
   /* for loop to calculate the following
    * args_len:    string length (including whitespace)
@@ -137,7 +187,7 @@ start_process (void *args_)
   int argc = 0;
   bool is_arg = false;
 
-  char *args = (char *)args_;
+  char *args = (char *)args_ + WORD_BYTES;
 
   /* args_len increases as we traverse the string */
   for (; args[args_len] != '\0'; args_len++) {
@@ -212,6 +262,11 @@ start_process (void *args_)
     /* If load failed, terminate the process. */
   if (!success) 
     process_exit (PROC_ERR);
+
+  /* Handle child_process_entry  */
+  struct child_process_entry* entry = args_;
+  entry->pid = cur->process->pid;
+  cur->process->entry = entry;
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
