@@ -329,7 +329,9 @@ write (int fd, const void *buffer, unsigned length) {
   }
   else {
     struct file* file_ = get_file (fd);
-    ASSERT (file_ != NULL);
+    if (file_ == NULL) {
+      return -1;
+    }
     return file_write(file_, buffer, length);
   }
 }
