@@ -210,7 +210,6 @@ get_file (int fd) {
       to_return = entry->file;
     }
   }
-  ASSERT (to_return != NULL);
   return to_return;
 }
 
@@ -383,7 +382,8 @@ close (int fd) {
 
 static void
 handle_close (uint8_t *esp, uint32_t *eax) {
-  printf("Handler: handle_close  called\n");
+  int fd = (int) parse_argument(&esp);
+  close(fd);
 }
 
 #define TOTAL_SYSCALLS 13
