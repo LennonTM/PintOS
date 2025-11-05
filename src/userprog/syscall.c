@@ -374,7 +374,8 @@ handle_tell (uint8_t *esp, uint32_t *eax) {
 /* Removes file descriptor fd from the fd_table and closes its file. */
 static void 
 close (int fd) {
-  ASSERT ((fd != STDIN_FILENO) && (fd != STDOUT_FILENO));
+  if ((fd == STDIN_FILENO) || (fd == STDOUT_FILENO))
+    return;
   struct file* file_ = get_file (fd);
   remove_file (file_);
   file_close (file_);
