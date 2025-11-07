@@ -43,7 +43,7 @@ root_process_init (void)
 
 /* Handles the parent side of initialising a child_process_entry */
 static void
-child_entry_init_parent_side(struct child_process_entry* entry) {
+child_entry_init(struct child_process_entry* entry) {
   /* Parent process needs a pointer to child_process_entry */
   struct process *parent_process = thread_current()->process;
   list_push_front(&parent_process->child_entries, &entry->child_entry);
@@ -70,7 +70,7 @@ process_execute (const char *cmd_line)
     malloc (sizeof(struct child_process_entry));
   if (entry == NULL)
     return TID_ERROR;
-  child_entry_init_parent_side(entry);
+  child_entry_init(entry);
 
   /* Allocate a page for */
   ptr_and_cmd_cpy = palloc_get_page (0);
@@ -89,9 +89,11 @@ process_execute (const char *cmd_line)
   /* Threads share a limit of 16 characters */
   /* Parse thread_name */
   char thread_name[MAX_NAME_LENGTH];
+  /* find the first non-whitespace character */
   char *cmd_line_ptr = cmd_line_copy;
   while (*cmd_line_ptr == ' ')
     cmd_line_ptr++;
+  /* copy MAX_NAME_LENGTH characters and tokenise it to remove whitespace */
   char *save_ptr;
   strlcpy (thread_name, cmd_line, MAX_NAME_LENGTH);
   strtok_r (thread_name, " ", &save_ptr);
@@ -103,11 +105,14 @@ process_execute (const char *cmd_line)
     start_process, 
     ptr_and_cmd_cpy);
 
-  if (tid == TID_ERROR)
-    palloc_free_page (cmd_line_copy);
-  
   /* Pass tid */
   entry->pid = tid;
+
+  if (tid == TID_ERROR) {
+    palloc_free_page (cmd_line_copy);
+    list_remove(&entry->child_entry);
+    free(entry);
+  }
 
   return tid;
 }
@@ -247,7 +252,7 @@ start_process (void *args_)
   write_pointer_to_stack(&esp_cpy, esp_ptr_cpy);
 
   /* Handle child_process_entry  */
-  struct child_process_entry *entry = *(void **)args_;
+  struct child_process_entry *entry = *(struct child_process_entry **)args_;
   cur->process->entry = entry;
 
   /* After loading, we are done with the command-line copy passed to us by process_execute. */
@@ -272,13 +277,12 @@ start_process (void *args_)
    1. Parent has exited or parent finished waiting
    2. Child has exited
    Returns true if the child process destroyed */
-static bool
+static void
 handle_entry_destruction(
   struct child_process_entry *entry, 
-  bool is_parent,
-  int *result) 
+  bool is_parent) 
 {
-  /* only one process can access this entries flags at once */
+  /* only one process can access this entry's flags at once */
   lock_acquire(&entry->lock);
 
   /* Set corresponding flag  */
@@ -289,23 +293,16 @@ handle_entry_destruction(
   }
 
   /* Check whether we should destroy the entry */
-  bool destroy_self = false;
-  if (entry->parent_flag && entry->child_flag) {
-    /* this struct is now obsolete, destroy entry */
-    destroy_self = true;
-    /* update result for waiting parent process */
-    if (result != NULL) {
-      *result = entry->return_value;
-    }
+  bool destroy_self = entry->parent_flag && entry->child_flag;
+  if (destroy_self) {
     list_remove(&entry->child_entry);
   }
   lock_release(&entry->lock);
 
   if (destroy_self) {
     free(entry);
-    return true;
   }
-  return false;
+  sema_up(&entry->sema);
 }
 
 /* Waits for thread TID to die and returns its exit status. 
@@ -333,10 +330,10 @@ process_wait (tid_t child_tid )
     /* pid is defined to be equal to tid */
     if (entry->pid == child_tid) {
       /* child found */
-      bool is_parent = true;
       sema_down(&entry->sema);
-      int result = PROC_ERR;
-      handle_entry_destruction(entry, is_parent, &result);
+      int result = entry->return_value;
+      bool is_parent = true;
+      handle_entry_destruction(entry, is_parent);
       return result;
     }
   }
@@ -356,25 +353,21 @@ process_exit (int exit_code)
   /* Handle exec and wait syscalls.
      For itself and all children, set the flag and potentially destroy */
   bool is_parent = true;
-  int result = 0;
-  /* Pass exit_code before_hand, and release the semaphore for waiting parent */
+  /* Pass exit_code before_hand */
   entry->return_value = exit_code;
-  bool is_destoyed = handle_entry_destruction(entry, is_parent, &result);
-  if (!is_destoyed) {
-    sema_up(&entry->sema);
-  }
+  handle_entry_destruction(entry, is_parent);
   
   /* Destory all children */
-  struct list_elem *e;
   is_parent = false;
-  for (
-      e = list_begin (&cur->child_entries); 
-      e != list_end (&cur->child_entries); 
-      e = list_next (e)) 
+  struct list_elem *e = list_begin (&cur->child_entries);
+  while (e != list_end (&cur->child_entries)) 
   {
     struct child_process_entry *child_entry = 
       list_entry (e, struct child_process_entry, child_entry);
-    handle_entry_destruction(child_entry, is_parent, NULL);
+    /* list_elem may be removed, so access list_next beforehand */
+    struct list_elem *e_next = list_next (e);
+    handle_entry_destruction(child_entry, is_parent);
+    e = e_next;
   }
   
   /* Clean up all process memory footprint, if it exists. */
