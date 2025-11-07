@@ -308,7 +308,9 @@ handle_filesize (uint8_t *esp, uint32_t *eax) {
    in getting open file.*/
 static int 
 read (int fd, void *buffer, unsigned length) {
-  ASSERT (fd != STDOUT_FILENO);
+  if (fd == STDOUT_FILENO) {
+    return -1;
+  }
   if (fd == STDIN_FILENO) {
     char* buffer_ = (char*) buffer;
     for (unsigned i = 0; i<length; i++) {
@@ -341,7 +343,9 @@ handle_read (uint8_t *esp, uint32_t *eax) {
    actually written.*/
 static int 
 write (int fd, const void *buffer, unsigned length) {
-  ASSERT (fd != STDIN_FILENO);
+  if (fd == STDIN_FILENO) {
+    return -1;
+  }
   if (fd == STDOUT_FILENO) {
     for (int char_left = length; char_left > 0; char_left -= MAX_WRITE_LENGTH)
     {
