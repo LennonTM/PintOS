@@ -360,6 +360,9 @@ write (int fd, const void *buffer, unsigned length) {
     if (file_ == NULL) {
       return -1;
     }
+    if (!check_valid_buffer(buffer, length)) {
+      exit(PROC_ERR);
+    }
     return file_write(file_, buffer, length);
   }
 }
