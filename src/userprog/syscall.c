@@ -102,6 +102,24 @@ check_valid_string(const char *string) {
   return false;
 }
 
+static bool
+check_valid_buffer(char *buffer, unsigned length) {
+  const uint8_t *p = buffer;
+  int byte;
+  const uint8_t *p_end = p + length;
+  while ((void *) p < PHYS_BASE) {
+    byte = get_user(p);
+    if (byte == -1) {
+      return false;
+    }
+    if (p >= p_end) {
+      return true;
+    }
+    p++;
+  }
+  return false;
+}
+
 
 /* Terminates PintOS by calling shutdown_power_off */
 static void 
@@ -210,7 +228,6 @@ get_file (int fd) {
       to_return = entry->file;
     }
   }
-  ASSERT (to_return != NULL);
   return to_return;
 }
 
@@ -267,7 +284,7 @@ open (const char *file) {
 static void
 handle_open (uint8_t *esp, uint32_t *eax) {
   char *file = (char *) parse_argument(&esp);
-  if (file == NULL)
+  if (!check_valid_string(file))
     exit(PROC_ERR);
   *eax = open(file);
 }
@@ -291,7 +308,9 @@ handle_filesize (uint8_t *esp, uint32_t *eax) {
    in getting open file.*/
 static int 
 read (int fd, void *buffer, unsigned length) {
-  ASSERT (fd != STDOUT_FILENO);
+  if (fd == STDOUT_FILENO) {
+    return -1;
+  }
   if (fd == STDIN_FILENO) {
     char* buffer_ = (char*) buffer;
     for (unsigned i = 0; i<length; i++) {
@@ -303,13 +322,19 @@ read (int fd, void *buffer, unsigned length) {
     struct file* file_ = get_file (fd);
     if (file_ == NULL)
       return -1;
+    if (!check_valid_buffer(buffer, length)) {
+      exit(PROC_ERR);
+    }
     return file_read (file_, buffer, length);
   }
 }
 
 static void
 handle_read (uint8_t *esp, uint32_t *eax) {
-  printf("Handler: handle_read  called\n");
+  int fd = (int) parse_argument(&esp);
+  void* buffer = (void*) parse_argument(&esp);
+  unsigned length = (unsigned) parse_argument(&esp);
+  *eax = read(fd, buffer, length);
 }
 
 #define MAX_WRITE_LENGTH 256
@@ -318,7 +343,9 @@ handle_read (uint8_t *esp, uint32_t *eax) {
    actually written.*/
 static int 
 write (int fd, const void *buffer, unsigned length) {
-  ASSERT (fd != STDIN_FILENO);
+  if (fd == STDIN_FILENO) {
+    return -1;
+  }
   if (fd == STDOUT_FILENO) {
     for (int char_left = length; char_left > 0; char_left -= MAX_WRITE_LENGTH)
     {
@@ -330,7 +357,12 @@ write (int fd, const void *buffer, unsigned length) {
   }
   else {
     struct file* file_ = get_file (fd);
-    ASSERT (file_ != NULL);
+    if (file_ == NULL) {
+      return -1;
+    }
+    if (!check_valid_buffer(buffer, length)) {
+      exit(PROC_ERR);
+    }
     return file_write(file_, buffer, length);
   }
 }
@@ -353,7 +385,9 @@ seek (int fd, unsigned position) {
 
 static void
 handle_seek (uint8_t *esp, uint32_t *eax) {
-  printf("Handler: handle_seek  called\n");
+  int fd = (int) parse_argument(&esp);
+  unsigned position = (unsigned) parse_argument(&esp);
+  seek(fd, position);
 }
 
 /* Returns the position of the next byte to be read or written in open file
@@ -366,13 +400,15 @@ tell (int fd) {
 
 static void
 handle_tell (uint8_t *esp, uint32_t *eax) {
-  printf("Handler: handle_tell  called\n");
+  int fd = (int) parse_argument(&esp);
+  *eax = tell(fd);
 }
 
 /* Removes file descriptor fd from the fd_table and closes its file. */
 static void 
 close (int fd) {
-  ASSERT ((fd != STDIN_FILENO) && (fd != STDOUT_FILENO));
+  if ((fd == STDIN_FILENO) || (fd == STDOUT_FILENO))
+    return;
   struct file* file_ = get_file (fd);
   remove_file (file_);
   file_close (file_);
@@ -380,7 +416,8 @@ close (int fd) {
 
 static void
 handle_close (uint8_t *esp, uint32_t *eax) {
-  printf("Handler: handle_close  called\n");
+  int fd = (int) parse_argument(&esp);
+  close(fd);
 }
 
 #define TOTAL_SYSCALLS 13
