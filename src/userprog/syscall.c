@@ -85,10 +85,10 @@ parse_argument (uint8_t ** uaddr) {
 
 static bool
 check_valid_string(const char *string) {
-  const uint8_t *p = string;
+  const char *p = string;
   int byte;
   while ((void *) p < PHYS_BASE) {
-    byte = get_user(p);
+    byte = get_user((const uint8_t *) p);
     if (byte == -1) {
       return false;
     }
@@ -102,11 +102,11 @@ check_valid_string(const char *string) {
 
 static bool
 check_valid_buffer(char *buffer, unsigned length) {
-  const uint8_t *p = buffer;
+  const char *p = buffer;
   int byte;
-  const uint8_t *p_end = p + length;
+  const char *p_end = p + length;
   while ((void *) p < PHYS_BASE) {
-    byte = get_user(p);
+    byte = get_user((const uint8_t *) p);
     if (byte == -1) {
       return false;
     }
@@ -156,6 +156,9 @@ exec (const char *cmd_line) {
 static void
 handle_exec (uint8_t *esp, uint32_t *eax UNUSED) {
   char *cmd_line = (char *) parse_argument(&esp);
+  if (!check_valid_string(cmd_line)) {
+    exit(PROC_ERR);
+  }
   pid_t res = exec(cmd_line);
   *eax = res;
 }
