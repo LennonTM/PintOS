@@ -9,6 +9,7 @@
 #define PROC_ERR (-1)  /* Exit code for erroneous process termination. */
 
 #define WORD_BYTES (sizeof(uint32_t)/sizeof(uint8_t))
+#define BYTE_SIZE sizeof(uint8_t *)
 typedef int pid_t;
 
 /* A user process, wrapped around a kernel thread. */

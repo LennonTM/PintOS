@@ -24,11 +24,6 @@ static bool process_init (struct thread *t);
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
-
-/* number of bytes to set-up a minimal stack 
-   where argv, argc and return address are stored */
-#define MIN_STACK_SIZE 12
-
 /* Initialises the main thread as a minimal root OS process.
    Note that when this thread/process terminates, the OS will shutdown. */
 void
@@ -112,10 +107,12 @@ process_execute (const char *cmd_line)
   /* Pass tid */
   entry->pid = tid;
 
-  if (tid == TID_ERROR || !entry->loading_succeeded) {
-    palloc_free_page (cmd_line_copy);
+  /* If process loading failed (which includes TID_ERROR)
+     free the auxiliary data */
+  if (!entry->loading_succeeded) {
     list_remove(&entry->child_entry);
     free(entry);
+    palloc_free_page (ptr_and_cmd_cpy);
     return TID_ERROR;
   }
 
@@ -215,6 +212,9 @@ start_process (void *args_)
   
   /* Initialise process. */
   success = process_init (cur);
+  /* Handle child_process_entry  */
+  struct child_process_entry *entry = *(struct child_process_entry **)args_;
+  cur->process->entry = entry;
 
   if (success)
     {
@@ -226,6 +226,11 @@ start_process (void *args_)
       success = load (file_name, &if_.eip, &if_.esp);
     }
 
+  /* If load failed, terminate the process. */
+  if (!success) {
+    process_exit (PROC_ERR); // entry->return_value == -1
+  }
+
   /* push arguments onto the stack */
   /* space to allocate to argument strings is equal to 
    * (args_len - space_count) characters and argc null terminals */
@@ -235,12 +240,12 @@ start_process (void *args_)
    * (size of a string pointer) * (number of arguments + null terminator) 
    * Before allocating space, memory align the stack pointer */
    /* We save a copy of esp_ptr, so we can point to the first argument later */
-  void *esp_str_aligned = (esp_str - ((uintptr_t)esp_str % sizeof(char *)));
-  void *esp_ptr = esp_str_aligned - sizeof(char *) * (argc + 1);
+  void *esp_str_aligned = (esp_str - ((uint32_t)esp_str % BYTE_SIZE));
+  void *esp_ptr = esp_str_aligned - BYTE_SIZE * (argc + 1);
   void *esp_ptr_cpy = esp_ptr;
 
   /* set new stack pointer */
-  if_.esp = esp_ptr - MIN_STACK_SIZE;
+  if_.esp = esp_ptr - 3 * WORD_BYTES;
 
   /* We tokenise the cmd line and write the 
      token and their pointer to the stack */
@@ -256,19 +261,11 @@ start_process (void *args_)
   write_int_to_stack(&esp_cpy, argc);
   write_pointer_to_stack(&esp_cpy, esp_ptr_cpy);
 
-  /* Handle child_process_entry  */
-  struct child_process_entry *entry = *(struct child_process_entry **)args_;
-  cur->process->entry = entry;
-
   /* After loading, we are done with the command-line copy passed to us by process_execute. */
   palloc_free_page (args_);
 
-    /* If load failed, terminate the process. */
-  if (!success) 
-    process_exit (PROC_ERR); // entry->return_value == -1
   entry->loading_succeeded = true;
-  sema_up(&entry->sema);     // entry->return_value == 0
-
+  sema_up(&entry->sema);
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in

@@ -58,8 +58,6 @@ put_user (uint8_t *udst, uint8_t byte)
   return error_code != -1;
 }
 
-#define BYTE_SIZE 8
-
 static bool
 get_user_word (const uint8_t *uaddr, uint32_t *result) {
   *result = 0;
