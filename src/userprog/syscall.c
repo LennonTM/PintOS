@@ -103,6 +103,24 @@ check_valid_string(const char *string) {
   return false;
 }
 
+static bool
+check_valid_buffer(char *buffer, unsigned length) {
+  const uint8_t *p = buffer;
+  int byte;
+  const uint8_t *p_end = p + length;
+  while ((void *) p < PHYS_BASE) {
+    byte = get_user(p);
+    if (byte == -1) {
+      return false;
+    }
+    if (p >= p_end) {
+      return true;
+    }
+    p++;
+  }
+  return false;
+}
+
 
 /* Terminates PintOS by calling shutdown_power_off */
 static void 
@@ -302,6 +320,9 @@ read (int fd, void *buffer, unsigned length) {
     struct file* file_ = get_file (fd);
     if (file_ == NULL)
       return -1;
+    if (!check_valid_buffer(buffer, length)) {
+      exit(PROC_ERR);
+    }
     return file_read (file_, buffer, length);
   }
 }
