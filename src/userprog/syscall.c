@@ -147,9 +147,12 @@ handle_exit (uint8_t *esp, uint32_t *eax UNUSED) {
   exit(status);
 }
 
+/* Runs the executable whose name is given in cmd line, passing any given 
+   arguments, and returns the new process’s program id (pid). 
+   Must return pid -1, if the program cannot load or run for any reason. */
 static pid_t 
 exec (const char *cmd_line) {
-  
+  return process_execute(cmd_line);
 }
 
 static void
@@ -157,21 +160,18 @@ handle_exec (uint8_t *esp, uint32_t *eax UNUSED) {
   char *cmd_line = (char *) parse_argument(&esp);
   pid_t res = exec(cmd_line);
   *eax = res;
-  printf("Handler: handle_exec  called\n");
 }
 
 
 static int 
 wait (pid_t wait_pid) {
-  /* tid is 1 to 1 with pid */
-  tid_t tid = wait_pid;
+  return process_wait((tid_t) wait_pid);
 }
 
 static void
 handle_wait (uint8_t *esp, uint32_t *eax) {
   pid_t wait_pid = (pid_t) parse_argument(&esp);
   *eax = wait(wait_pid);
-  printf("Handler: handle_wait  called\n");
 }
 
 /* Creates a new file called file initially initial_size bytes in size.

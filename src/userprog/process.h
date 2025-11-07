@@ -42,6 +42,9 @@ struct child_process_entry
     bool parent_flag;
     /* Flag that is set when the child process dies */  
     bool child_flag;
+    /* Flag that is set when the child process dies */  
+    bool loading_succeeded;
+    
 
     /* Performs synchronisation: the parent must wait until the child is dead */
     struct semaphore sema;

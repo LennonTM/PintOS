@@ -51,6 +51,7 @@ child_entry_init(struct child_process_entry* entry) {
   /* initialise flags, and synchronisation primitives */
   entry->parent_flag = false;
   entry->child_flag = false;
+  entry->loading_succeeded = false;
   sema_init(&entry->sema, 0);
   lock_init(&entry->lock);
 }
@@ -102,16 +103,20 @@ process_execute (const char *cmd_line)
   tid = thread_create (
     thread_name, 
     PRI_DEFAULT, 
-    start_process, 
+    start_process,
     ptr_and_cmd_cpy);
+
+  /* wait until the process exits, or successfully creates the thread */
+  sema_down(&entry->sema);
 
   /* Pass tid */
   entry->pid = tid;
 
-  if (tid == TID_ERROR) {
+  if (tid == TID_ERROR || !entry->loading_succeeded) {
     palloc_free_page (cmd_line_copy);
     list_remove(&entry->child_entry);
     free(entry);
+    return TID_ERROR;
   }
 
   return tid;
@@ -260,7 +265,9 @@ start_process (void *args_)
 
     /* If load failed, terminate the process. */
   if (!success) 
-    process_exit (PROC_ERR);
+    process_exit (PROC_ERR); // entry->return_value == -1
+  entry->loading_succeeded = true;
+  sema_up(&entry->sema);     // entry->return_value == 0
 
 
   /* Start the user process by simulating a return from an
@@ -296,13 +303,14 @@ handle_entry_destruction(
   bool destroy_self = entry->parent_flag && entry->child_flag;
   if (destroy_self) {
     list_remove(&entry->child_entry);
+  } else {
+    sema_up(&entry->sema);
   }
   lock_release(&entry->lock);
 
   if (destroy_self) {
     free(entry);
   }
-  sema_up(&entry->sema);
 }
 
 /* Waits for thread TID to die and returns its exit status. 
