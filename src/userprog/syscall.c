@@ -130,14 +130,14 @@ handle_exit (uint8_t *esp, uint32_t *eax UNUSED) {
 }
 
 static pid_t 
-exec (const char *file) {
-
+exec (const char *cmd_line) {
+  
 }
 
 static void
 handle_exec (uint8_t *esp, uint32_t *eax UNUSED) {
-  char *file = (char *) parse_argument(&esp);
-  pid_t res = exec(file);
+  char *cmd_line = (char *) parse_argument(&esp);
+  pid_t res = exec(cmd_line);
   *eax = res;
   printf("Handler: handle_exec  called\n");
 }
@@ -145,7 +145,8 @@ handle_exec (uint8_t *esp, uint32_t *eax UNUSED) {
 
 static int 
 wait (pid_t wait_pid) {
-
+  /* tid is 1 to 1 with pid */
+  tid_t tid = wait_pid;
 }
 
 static void

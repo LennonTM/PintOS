@@ -28,7 +28,6 @@ struct process
     /* Lists all children entries of this process 
        This allows communication with all children. */
     struct list child_entries; 
-    pid_t pid;
   };
 
 
@@ -42,7 +41,7 @@ struct child_process_entry
     /* Flag that is set when the parent dies or has finished waiting */
     bool parent_flag;
     /* Flag that is set when the child process dies */  
-    bool self_flag;
+    bool child_flag;
 
     /* Performs synchronisation: the parent must wait until the child is dead */
     struct semaphore sema;

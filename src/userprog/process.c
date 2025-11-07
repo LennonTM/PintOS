@@ -24,8 +24,6 @@ static bool process_init (struct thread *t);
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
-/* Lock used by allocate_pid(). */
-static struct lock pid_lock;
 
 /* number of bytes to set-up a minimal stack 
    where argv, argc and return address are stored */
@@ -36,7 +34,6 @@ static struct lock pid_lock;
 void
 root_process_init (void)
 {
-  lock_init(&pid_lock);
   struct thread *cur = thread_current ();
   bool success = process_init (cur);
   
@@ -53,7 +50,7 @@ child_entry_init_parent_side(struct child_process_entry* entry) {
 
   /* initialise flags, and synchronisation primitives */
   entry->parent_flag = false;
-  entry->self_flag = false;
+  entry->child_flag = false;
   sema_init(&entry->sema, 0);
   lock_init(&entry->lock);
 }
@@ -103,22 +100,11 @@ process_execute (const char *cmd_line)
   tid = thread_create (thread_name, PRI_DEFAULT, start_process, ptr_and_cmd_cpy);
   if (tid == TID_ERROR)
     palloc_free_page (cmd_line_copy);
-    
+  
+  /* Pass tid */
+  entry->pid = tid;
+
   return tid;
-}
-
-/* Returns a pid to use for a new process. */
-static pid_t
-allocate_pid (void) 
-{
-  static pid_t next_pid = 1;
-  pid_t pid;
-
-  lock_acquire (&pid_lock);
-  pid = next_pid++;
-  lock_release (&pid_lock);
-
-  return pid;
 }
 
 /* Basic initialisation of a process running on thread T. */
@@ -138,7 +124,6 @@ process_init (struct thread *t)
   list_init(process->fd_table);
 
   /* Initialise process id */
-  process->pid = allocate_pid();
   list_init(&process->child_entries);
   
   /* Link thread to its process. */
@@ -256,6 +241,10 @@ start_process (void *args_)
   write_int_to_stack(&esp_cpy, argc);
   write_pointer_to_stack(&esp_cpy, esp_ptr_cpy);
 
+  /* Handle child_process_entry  */
+  struct child_process_entry *entry = *(void **)args_;
+  cur->process->entry = entry;
+
   /* After loading, we are done with the command-line copy passed to us by process_execute. */
   palloc_free_page (args_);
 
@@ -263,10 +252,6 @@ start_process (void *args_)
   if (!success) 
     process_exit (PROC_ERR);
 
-  /* Handle child_process_entry  */
-  struct child_process_entry* entry = args_;
-  entry->pid = cur->process->pid;
-  cur->process->entry = entry;
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -276,6 +261,46 @@ start_process (void *args_)
      and jump to it. */
   asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
   NOT_REACHED ();
+}
+
+/* Will destroy itself if both of the following occur
+   1. Parent has exited or parent finished waiting
+   2. Child has exited
+   Returns true if the child process destroyed */
+static bool
+handle_entry_destruction(
+  struct child_process_entry *entry, 
+  bool is_parent,
+  int *result) 
+{
+  /* only one process can access this entries flags at once */
+  lock_acquire(&entry->lock);
+
+  /* Set corresponding flag  */
+  if (is_parent) {
+    entry->parent_flag = true;
+  } else {
+    entry->child_flag = true;
+  }
+
+  /* Check whether we should destroy the entry */
+  bool destroy_self = false;
+  if (entry->parent_flag && entry->child_flag) {
+    /* this struct is now obsolete, destroy entry */
+    destroy_self = true;
+    /* update result for waiting parent process */
+    if (result != NULL) {
+      *result = entry->return_value;
+    }
+    list_remove(&entry->child_entry);
+  }
+  lock_release(&entry->lock);
+
+  if (destroy_self) {
+    free(entry);
+    return true;
+  }
+  return false;
 }
 
 /* Waits for thread TID to die and returns its exit status. 
@@ -288,19 +313,64 @@ start_process (void *args_)
  * This function will be implemented in task 2.
  * For now, it does nothing. */
 int
-process_wait (tid_t child_tid UNUSED) 
+process_wait (tid_t child_tid ) 
 {
-  /* Stub for process_wait */
-  timer_msleep(1 * 1000);
+  struct process *cur = thread_current()->process;
+  struct list_elem *e;
+  /* find the correct child */
+  for (
+      e = list_begin (&cur->child_entries); 
+      e != list_end (&cur->child_entries); 
+      e = list_next (e)) 
+  {
+    struct child_process_entry *entry = 
+      list_entry (e, struct child_process_entry, child_entry);
+    /* pid is defined to be equal to tid */
+    if (entry->pid == child_tid) {
+      /* child found */
+      bool is_parent = true;
+      sema_down(&entry->sema);
+      int result = PROC_ERR;
+      handle_entry_destruction(entry, is_parent, &result);
+      return result;
+    }
+  }
+  /* child not found */
   return PROC_ERR;
 }
 
 /* Free the current process's resources and then exit the underlying thread. */
 void
-process_exit (int exit_code UNUSED)
+process_exit (int exit_code)
 {
   struct process *cur = thread_current ()->process;
   uint32_t *pd;
+  
+  struct child_process_entry *entry = cur->entry;
+  
+  /* Handle exec and wait syscalls.
+     For itself and all children, set the flag and potentially destroy */
+  bool is_parent = true;
+  int result = 0;
+  /* Pass exit_code before_hand, and release the semaphore for waiting parent */
+  entry->return_value = exit_code;
+  bool is_destoyed = handle_entry_destruction(entry, is_parent, &result);
+  if (!is_destoyed) {
+    sema_up(&entry->sema);
+  }
+  
+  /* Destory all children */
+  struct list_elem *e;
+  is_parent = false;
+  for (
+      e = list_begin (&cur->child_entries); 
+      e != list_end (&cur->child_entries); 
+      e = list_next (e)) 
+  {
+    struct child_process_entry *child_entry = 
+      list_entry (e, struct child_process_entry, child_entry);
+    handle_entry_destruction(child_entry, is_parent, NULL);
+  }
   
   /* Clean up all process memory footprint, if it exists. */
   if (cur != NULL)
