@@ -69,7 +69,7 @@ process_execute (const char *cmd_line)
   struct child_process_entry* entry = 
     malloc (sizeof(struct child_process_entry));
   if (entry == NULL)
-    PANIC("Out of memory");
+    return TID_ERROR;
   child_entry_init_parent_side(entry);
 
   /* Allocate a page for */
@@ -97,7 +97,12 @@ process_execute (const char *cmd_line)
   strtok_r (thread_name, " ", &save_ptr);
 
   /* Create a new thread to execute CMD_LINE. */
-  tid = thread_create (thread_name, PRI_DEFAULT, start_process, ptr_and_cmd_cpy);
+  tid = thread_create (
+    thread_name, 
+    PRI_DEFAULT, 
+    start_process, 
+    ptr_and_cmd_cpy);
+
   if (tid == TID_ERROR)
     palloc_free_page (cmd_line_copy);
   
