@@ -247,6 +247,11 @@ start_process (void *args_)
   /* set new stack pointer */
   if_.esp = esp_ptr - 3 * WORD_BYTES;
 
+  /* Exit if the user stack exceeds one page after arument parsing */
+  if (if_.esp < PHYS_BASE - PGSIZE) {
+    process_exit(PROC_ERR);
+  }
+
   /* We tokenise the cmd line and write the 
      token and their pointer to the stack */
   for (; token != NULL; token = strtok_r (NULL, " ", &save_ptr)) {
