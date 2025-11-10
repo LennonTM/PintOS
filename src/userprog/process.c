@@ -362,13 +362,13 @@ process_exit (int exit_code)
   
   /* Handle exec and wait syscalls.
      For itself and all children, set the flag and potentially destroy */
-  bool is_parent = true;
+  bool is_parent = false;
   /* Pass exit_code before_hand */
   entry->return_value = exit_code;
   handle_entry_destruction(entry, is_parent);
   
   /* Destory all children */
-  is_parent = false;
+  is_parent = true;
   struct list_elem *e = list_begin (&cur->child_entries);
   while (e != list_end (&cur->child_entries)) 
   {
