@@ -50,6 +50,8 @@ put_user (uint8_t *udst, uint8_t byte)
   return error_code != -1;
 }
 
+/* Read a 32 bit word from address uaddr into result
+   return false for invalid user memory */
 static bool
 get_user_word (const uint8_t *uaddr, uint32_t *result) {
   *result = 0;
@@ -64,6 +66,10 @@ get_user_word (const uint8_t *uaddr, uint32_t *result) {
   return true;
 }
 
+/* Parse a 32 bit argument stored on the user stack at address *uaddr,
+   if invalid memory is accessed, handle the fault
+   (in this case exit with an error message)
+   otherwise, increment the stack pointer by 4 bytes and return the argument */
 static uint32_t
 parse_argument (uint8_t ** uaddr) {
   uint32_t result;
@@ -75,16 +81,16 @@ parse_argument (uint8_t ** uaddr) {
   return result;
 }
 
+/* Verify if string points to a valid string in user memory */
 static bool
 check_valid_string(const char *string) {
   const char *p = string;
-  int byte;
   while ((void *) p < PHYS_BASE) {
-    byte = get_user((const uint8_t *) p);
+    int byte = get_user((const uint8_t *) p);
     if (byte == -1) {
       return false;
     }
-    if (byte == '\0') {
+    if ((char) byte == '\0') {
       return true;
     }
     p++;
@@ -92,8 +98,9 @@ check_valid_string(const char *string) {
   return false;
 }
 
+/* Verify that the buffer of specified length is valid user memory */
 static bool
-check_valid_buffer(char *buffer, unsigned length) {
+check_valid_buffer(const char *buffer, unsigned length) {
   const char *p = buffer;
   int byte;
   const char *p_end = p + length;
@@ -109,7 +116,6 @@ check_valid_buffer(char *buffer, unsigned length) {
   }
   return false;
 }
-
 
 /* Terminates PintOS by calling shutdown_power_off */
 static void 
@@ -232,14 +238,14 @@ handle_filesize (uint8_t *esp, uint32_t *eax) {
    number of bytes actually read. Returns -1 if there is an error
    in getting open file.*/
 static int 
-read (int fd, void *buffer, unsigned length) {
+read (int fd, void *buffer_, unsigned length) {
   if (fd == STDOUT_FILENO) {
     return -1;
   }
+  char* buffer = (char*) buffer_;
   if (fd == STDIN_FILENO) {
-    char* buffer_ = (char*) buffer;
     for (unsigned i = 0; i<length; i++) {
-      *buffer_++ = input_getc();
+      *buffer++ = input_getc();
     }
     return length;
   }
@@ -247,9 +253,6 @@ read (int fd, void *buffer, unsigned length) {
     struct file* file = get_file (&thread_current()->process->fd_table, fd);
     if (file == NULL)
       return -1;
-    if (!check_valid_buffer(buffer, length)) {
-      exit(PROC_ERR);
-    }
     return file_read (file, buffer, length);
   }
 }
@@ -259,15 +262,19 @@ handle_read (uint8_t *esp, uint32_t *eax) {
   int fd = (int) parse_argument(&esp);
   void* buffer = (void*) parse_argument(&esp);
   unsigned length = (unsigned) parse_argument(&esp);
+  if (!check_valid_buffer(buffer, length)) {
+    exit(PROC_ERR);
+  }
   *eax = read(fd, buffer, length);
 }
 
 #define MAX_WRITE_LENGTH 256
 
-/* Writes size bytes from buffer to open file fd. Returns number of bytes
-   actually written.*/
+/* Writes length bytes from buffer to open file fd. 
+   Returns number of bytes actually written */
 static int 
-write (int fd, const void *buffer, unsigned length) {
+write (int fd, const void *buffer_, unsigned length) {
+  const char *buffer = buffer_;
   if (fd == STDIN_FILENO) {
     return -1;
   }
@@ -285,9 +292,6 @@ write (int fd, const void *buffer, unsigned length) {
     if (file == NULL) {
       return -1;
     }
-    if (!check_valid_buffer(buffer, length)) {
-      exit(PROC_ERR);
-    }
     return file_write(file, buffer, length);
   }
 }
@@ -297,6 +301,9 @@ handle_write (uint8_t *esp, uint32_t *eax) {
   int fd = (int) parse_argument(&esp);
   const void *buffer = (const void *) parse_argument(&esp);
   unsigned length = (unsigned) parse_argument(&esp);
+  if (!check_valid_buffer(buffer, length)) {
+    exit(PROC_ERR);
+  }
   *eax = write(fd, buffer, length);
 }
 
@@ -309,7 +316,7 @@ seek (int fd, unsigned position) {
 }
 
 static void
-handle_seek (uint8_t *esp, uint32_t *eax) {
+handle_seek (uint8_t *esp, uint32_t *eax UNUSED) {
   int fd = (int) parse_argument(&esp);
   unsigned position = (unsigned) parse_argument(&esp);
   seek(fd, position);
@@ -338,7 +345,7 @@ close (int fd) {
 }
 
 static void
-handle_close (uint8_t *esp, uint32_t *eax) {
+handle_close (uint8_t *esp, uint32_t *eax UNUSED) {
   int fd = (int) parse_argument(&esp);
   close(fd);
 }
