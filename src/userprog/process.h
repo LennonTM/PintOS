@@ -29,6 +29,8 @@ struct process
     /* Lists all children entries of this process 
        This allows communication with all children. */
     struct list child_entries; 
+
+    struct file *executable_file;
   };
 
 

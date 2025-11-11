@@ -385,7 +385,13 @@ process_exit (int exit_code)
   
   /* Clean up all process memory footprint, if it exists. */
   if (cur != NULL)
-    {  
+    {
+      
+      if (cur->executable_file != NULL) {
+            file_allow_write(cur->executable_file);
+            file_close(cur->executable_file);
+            cur->executable_file = NULL;
+        }
 
       /* Destroy the current process's page directory and switch back
          to the kernel-only page directory. */
@@ -608,10 +614,17 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
   success = true;
 
+  struct process *cur_proc = thread_current()->process;
+  cur_proc->executable_file = file;
+  file_deny_write(file);
+
  done:
   /* We arrive here whether the load is successful or not. */
-  file_close (file);
-  return success;
+  if (!success && file != NULL) {
+        file_close (file);
+    }
+    
+    return success;
 }
 
 /* load() helpers. */
