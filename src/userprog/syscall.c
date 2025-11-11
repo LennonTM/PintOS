@@ -134,8 +134,6 @@ handle_halt(uint8_t *esp UNUSED, uint32_t *eax UNUSED) {
 
 static void NO_RETURN
 exit (int status) {
-  char *process_name = thread_current()->name;
-  printf ("%s: exit(%d)\n", process_name, status);
   process_exit (status);
 }
 

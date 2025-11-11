@@ -358,6 +358,9 @@ process_exit (int exit_code)
   struct process *cur = thread_current ()->process;
   uint32_t *pd;
   
+  char *process_name = thread_current()->name;
+  printf ("%s: exit(%d)\n", process_name, exit_code);
+
   struct child_process_entry *entry = cur->entry;
   
   /* Handle exec and wait syscalls.
