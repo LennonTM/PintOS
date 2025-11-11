@@ -11,15 +11,6 @@
 #include "devices/input.h"
 #include "lib/stdio.h"
 
-/* A entry in the fd_table. */
-struct fd_entry
-  {
-    int fd; /* File descriptor. */
-    struct file* file; /* File which can be handled by file.c. */
-    struct list_elem elem; /* List element for doubly-linked td_table list. */
-  };
-
-
 static void syscall_handler (struct intr_frame *);
 
 /* Type of a specific system call handler helper function
@@ -247,7 +238,7 @@ add_file (struct file* file_) {
   return fd;
 }
 
-/* Removes the file from the file descriptor table. */
+/* Removes the file from the file descriptor table and frees the entry */
 static void
 remove_file (struct file* file_) {
   struct list* fd_table = &thread_current ()->process->fd_table;
@@ -261,6 +252,7 @@ remove_file (struct file* file_) {
     struct fd_entry *entry = list_entry (e, struct fd_entry, elem);
     if (entry->file == file_) {
       list_remove (e);
+      free (entry);
       return;
     }
   }

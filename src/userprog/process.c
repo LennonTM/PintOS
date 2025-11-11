@@ -352,7 +352,9 @@ process_wait (tid_t child_tid )
 }
 
 static void
-clean_child_entries(struct process *cur, int exit_code) {
+clean_child_entries(int exit_code) {
+  struct process *cur = thread_current()->process;
+  ASSERT (cur != NULL);
   struct child_process_entry *entry = cur->entry;
 
   /* Pass exit_code before hand */
@@ -378,6 +380,22 @@ clean_child_entries(struct process *cur, int exit_code) {
   }
 }
 
+static void
+clean_opened_files(void) {
+  struct list* fd_table = &thread_current ()->process->fd_table;
+  /* Iterates through the fd_table of the current process,
+     closing all files and removing them from the table */
+  struct list_elem *e = list_begin (fd_table); 
+  while (e != list_end (fd_table)) {
+    struct fd_entry *entry = list_entry (e, struct fd_entry, elem);
+    struct file *file_ = entry->file;
+    file_close (file_);
+    /* Remove list_elem from the list before freeing the entry */
+    e = list_remove (e);
+    free (entry);
+  }
+}
+
 /* Free the current process's resources and then exit the underlying thread. */
 void
 process_exit (int exit_code)
@@ -388,7 +406,6 @@ process_exit (int exit_code)
   char *process_name = thread_current()->name;
   printf ("%s: exit(%d)\n", process_name, exit_code);
 
-  
   /* Clean up all process memory footprint, if it exists. */
   if (cur != NULL)
     {
@@ -397,7 +414,9 @@ process_exit (int exit_code)
         file_close(cur->executable_file);
       }
 
-      clean_child_entries(cur, exit_code);
+      clean_child_entries(exit_code);
+
+      clean_opened_files();
 
       /* Destroy the current process's page directory and switch back
          to the kernel-only page directory. */
