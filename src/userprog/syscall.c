@@ -201,7 +201,6 @@ static void
 handle_remove (uint8_t *esp, uint32_t *eax) {
   char *file = (char *) parse_argument(&esp);
   *eax = remove(file);
-  printf("Handler: handle_remove  called\n");
 }
 
 /* The first user file descriptor is 2 since 0 and 1 are used
