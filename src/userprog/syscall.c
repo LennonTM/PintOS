@@ -211,7 +211,7 @@ handle_remove (uint8_t *esp, uint32_t *eax) {
 static struct file*
 get_file (int fd) {
   struct file* to_return = NULL;
-  struct list* fd_table = thread_current ()->process->fd_table;
+  struct list* fd_table = &thread_current ()->process->fd_table;
   /* Iterates through the fd_table of the current process, and gets the 
      struct file of file descriptor fd. */
   for (
@@ -233,7 +233,7 @@ get_file (int fd) {
    the file is stored under. */
 static int
 add_file (struct file* file_) {
-  struct list* fd_table = thread_current ()->process->fd_table;
+  struct list* fd_table = &thread_current ()->process->fd_table;
   /* As an invariant the last element in fd_table has the largest fd thus
      we choose the next fd as this should not have been chosen already. In the
      case where fd_table is empty the only file_descriptors are 0/1 for
@@ -250,7 +250,7 @@ add_file (struct file* file_) {
 /* Removes the file from the file descriptor table. */
 static void
 remove_file (struct file* file_) {
-  struct list* fd_table = thread_current ()->process->fd_table;
+  struct list* fd_table = &thread_current ()->process->fd_table;
   /* Iterates through the fd_table of the current process, and removes
      entries which have file file_*/
   for (

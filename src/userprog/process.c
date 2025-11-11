@@ -132,9 +132,8 @@ process_init (struct thread *t)
   process->pagedir = NULL;
   process->thread = t;
   process->recover_flag = false;
-  process->fd_table = malloc (sizeof(struct list *));
   process->executable_file = NULL;
-  list_init(process->fd_table);
+  list_init(&process->fd_table);
 
   /* Initialise process id */
   list_init(&process->child_entries);
@@ -352,6 +351,33 @@ process_wait (tid_t child_tid )
   return PROC_ERR;
 }
 
+static void
+clean_child_entries(struct process *cur, int exit_code) {
+  struct child_process_entry *entry = cur->entry;
+
+  /* Pass exit_code before hand */
+  entry->return_value = exit_code;
+  /* Indicate to the child entry of the process
+     that the child (current process) exited */
+  bool is_parent = false;
+  handle_entry_destruction(entry, is_parent);
+
+  /* Indicate to all child entries of all children of the process
+     that the parent exited */
+  is_parent = true;
+  struct list_elem *e = list_begin (&cur->child_entries);
+  while (e != list_end (&cur->child_entries)) 
+  {
+    struct child_process_entry *child_entry = 
+      list_entry (e, struct child_process_entry, child_entry);
+    /* list_elem will get removed after handle_entry_destruction call,
+       so access list_next beforehand */
+    struct list_elem *e_next = list_next (e);
+    handle_entry_destruction(child_entry, is_parent);
+    e = e_next;
+  }
+}
+
 /* Free the current process's resources and then exit the underlying thread. */
 void
 process_exit (int exit_code)
@@ -362,27 +388,6 @@ process_exit (int exit_code)
   char *process_name = thread_current()->name;
   printf ("%s: exit(%d)\n", process_name, exit_code);
 
-  struct child_process_entry *entry = cur->entry;
-  
-  /* Handle exec and wait syscalls.
-     For itself and all children, set the flag and potentially destroy */
-  bool is_parent = false;
-  /* Pass exit_code before_hand */
-  entry->return_value = exit_code;
-  handle_entry_destruction(entry, is_parent);
-  
-  /* Destory all children */
-  is_parent = true;
-  struct list_elem *e = list_begin (&cur->child_entries);
-  while (e != list_end (&cur->child_entries)) 
-  {
-    struct child_process_entry *child_entry = 
-      list_entry (e, struct child_process_entry, child_entry);
-    /* list_elem may be removed, so access list_next beforehand */
-    struct list_elem *e_next = list_next (e);
-    handle_entry_destruction(child_entry, is_parent);
-    e = e_next;
-  }
   
   /* Clean up all process memory footprint, if it exists. */
   if (cur != NULL)
@@ -391,6 +396,8 @@ process_exit (int exit_code)
       if (cur->executable_file != NULL) {
         file_close(cur->executable_file);
       }
+
+      clean_child_entries(cur, exit_code);
 
       /* Destroy the current process's page directory and switch back
          to the kernel-only page directory. */
