@@ -133,6 +133,7 @@ process_init (struct thread *t)
   process->thread = t;
   process->recover_flag = false;
   process->fd_table = malloc (sizeof(struct list *));
+  process->executable_file = NULL;
   list_init(process->fd_table);
 
   /* Initialise process id */
@@ -388,10 +389,8 @@ process_exit (int exit_code)
     {
       
       if (cur->executable_file != NULL) {
-            file_allow_write(cur->executable_file);
-            file_close(cur->executable_file);
-            cur->executable_file = NULL;
-        }
+        file_close(cur->executable_file);
+      }
 
       /* Destroy the current process's page directory and switch back
          to the kernel-only page directory. */
