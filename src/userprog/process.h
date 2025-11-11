@@ -20,7 +20,7 @@ struct process
     bool recover_flag;      /* Indicates whether the page fault
                                needs to be recovered from, without
                                causing kernel panic */
-    struct list *fd_table;   /* List of file descriptors to file structs. */
+    struct list fd_table;   /* List of file descriptors to file structs. */
     
     /* Each process is allocated a child_process_entry
        This allows communication with

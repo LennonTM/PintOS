@@ -132,8 +132,7 @@ process_init (struct thread *t)
   process->pagedir = NULL;
   process->thread = t;
   process->recover_flag = false;
-  process->fd_table = malloc (sizeof(struct list *));
-  list_init(process->fd_table);
+  list_init(&process->fd_table);
 
   /* Initialise process id */
   list_init(&process->child_entries);
