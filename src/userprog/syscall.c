@@ -1,5 +1,6 @@
 #include "userprog/syscall.h"
 #include "userprog/process.h"
+#include "userprog/fd_table.h"
 #include "threads/interrupt.h"
 #include <stdio.h>
 #include <syscall-nr.h>
@@ -194,82 +195,16 @@ handle_remove (uint8_t *esp, uint32_t *eax) {
   *eax = remove(file);
 }
 
-/* The first user file descriptor is 2 since 0 and 1 are used
-   for the console. */
-#define USER_FIRST_FD 2
-/* Retrives the struct file of the file descriptor (fd) of the 
-   current process.*/
-static struct file*
-get_file (int fd) {
-  struct file* to_return = NULL;
-  struct list* fd_table = &thread_current ()->process->fd_table;
-  /* Iterates through the fd_table of the current process, and gets the 
-     struct file of file descriptor fd. */
-  for (
-      struct list_elem *e = list_begin (fd_table); 
-      e != list_end (fd_table); 
-      e = list_next (e))
-  {
-    struct fd_entry *entry = list_entry (e, struct fd_entry, elem);
-    if (entry->fd == fd) {
-      /* As an invariant there should be only one file of a given fd. */
-      ASSERT (to_return == NULL);
-      to_return = entry->file;
-    }
-  }
-  return to_return;
-}
-
-/* Adds file to the file descriptor table, returns the file descriptor that
-   the file is stored under. */
-static int
-add_file (struct file* file_) {
-  struct list* fd_table = &thread_current ()->process->fd_table;
-  /* As an invariant the last element in fd_table has the largest fd thus
-     we choose the next fd as this should not have been chosen already. In the
-     case where fd_table is empty the only file_descriptors are 0/1 for
-     the console. */
-  int fd = list_empty (fd_table) ? USER_FIRST_FD : 
-    list_entry(list_back(fd_table), struct fd_entry, elem)->fd + 1;
-  struct fd_entry* entry =  malloc (sizeof(struct fd_entry));
-  entry->fd = fd;
-  entry->file = file_;
-  list_push_back(fd_table, &entry->elem);
-  return fd;
-}
-
-/* Removes the file from the file descriptor table and frees the entry */
-static void
-remove_file (struct file* file_) {
-  struct list* fd_table = &thread_current ()->process->fd_table;
-  /* Iterates through the fd_table of the current process, and removes
-     entries which have file file_*/
-  for (
-      struct list_elem *e = list_begin (fd_table); 
-      e != list_end (fd_table); 
-      e = list_next (e))
-  {
-    struct fd_entry *entry = list_entry (e, struct fd_entry, elem);
-    if (entry->file == file_) {
-      list_remove (e);
-      free (entry);
-      return;
-    }
-  }
-}
-
-
 /* Opens the file called file. Returns non-negative integer handle called
    file descriptor (fd) or -1 if file could not be opened. A fd of 1 or
    0 is reserved for the console. */
 static int 
-open (const char *file) {
-  struct file* file_ = filesys_open(file);
-  if (file_ == NULL)
+open (const char *file_name) {
+  struct file* file = filesys_open(file_name);
+  if (file == NULL)
     return -1;
-  return add_file (file_);
+  return add_file (&thread_current()->process->fd_table, file);
 }
-
 
 static void
 handle_open (uint8_t *esp, uint32_t *eax) {
@@ -283,8 +218,8 @@ handle_open (uint8_t *esp, uint32_t *eax) {
 static int 
 filesize (int fd) {
   ASSERT ((fd != STDIN_FILENO) && (fd != STDOUT_FILENO));
-  struct file *file_ = get_file (fd);
-  return file_length (file_);
+  struct file *file = get_file (&thread_current()->process->fd_table, fd);
+  return file_length (file);
 }
 
 static void
@@ -309,13 +244,13 @@ read (int fd, void *buffer, unsigned length) {
     return length;
   }
   else {
-    struct file* file_ = get_file (fd);
-    if (file_ == NULL)
+    struct file* file = get_file (&thread_current()->process->fd_table, fd);
+    if (file == NULL)
       return -1;
     if (!check_valid_buffer(buffer, length)) {
       exit(PROC_ERR);
     }
-    return file_read (file_, buffer, length);
+    return file_read (file, buffer, length);
   }
 }
 
@@ -346,14 +281,14 @@ write (int fd, const void *buffer, unsigned length) {
     return length;
   }
   else {
-    struct file* file_ = get_file (fd);
-    if (file_ == NULL) {
+    struct file* file = get_file (&thread_current()->process->fd_table, fd);
+    if (file == NULL) {
       return -1;
     }
     if (!check_valid_buffer(buffer, length)) {
       exit(PROC_ERR);
     }
-    return file_write(file_, buffer, length);
+    return file_write(file, buffer, length);
   }
 }
 
@@ -369,8 +304,8 @@ handle_write (uint8_t *esp, uint32_t *eax) {
    Expressed in bytes from the beginning of the file. */
 static void 
 seek (int fd, unsigned position) {
-  struct file* file_ = get_file (fd);
-  file_seek (file_, position);
+  struct file* file = get_file (&thread_current()->process->fd_table, fd);
+  file_seek (file, position);
 }
 
 static void
@@ -384,8 +319,8 @@ handle_seek (uint8_t *esp, uint32_t *eax) {
    fd, expressed in bytes from beginning of the file. */
 static unsigned 
 tell (int fd) {
-  struct file* file_ = get_file (fd);
-  return file_tell (file_);
+  struct file* file = get_file (&thread_current()->process->fd_table, fd);
+  return file_tell (file);
 }
 
 static void
@@ -399,9 +334,7 @@ static void
 close (int fd) {
   if ((fd == STDIN_FILENO) || (fd == STDOUT_FILENO))
     return;
-  struct file* file_ = get_file (fd);
-  remove_file (file_);
-  file_close (file_);
+  remove_file (&thread_current()->process->fd_table, fd);
 }
 
 static void

@@ -8,6 +8,7 @@
 #include "userprog/gdt.h"
 #include "userprog/pagedir.h"
 #include "userprog/tss.h"
+#include "userprog/fd_table.h"
 #include "filesys/directory.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
@@ -133,7 +134,7 @@ process_init (struct thread *t)
   process->thread = t;
   process->recover_flag = false;
   process->executable_file = NULL;
-  list_init(&process->fd_table);
+  fd_table_init(&process->fd_table);
 
   /* Initialise process id */
   list_init(&process->child_entries);
@@ -380,22 +381,6 @@ clean_child_entries(int exit_code) {
   }
 }
 
-static void
-clean_opened_files(void) {
-  struct list* fd_table = &thread_current ()->process->fd_table;
-  /* Iterates through the fd_table of the current process,
-     closing all files and removing them from the table */
-  struct list_elem *e = list_begin (fd_table); 
-  while (e != list_end (fd_table)) {
-    struct fd_entry *entry = list_entry (e, struct fd_entry, elem);
-    struct file *file_ = entry->file;
-    file_close (file_);
-    /* Remove list_elem from the list before freeing the entry */
-    e = list_remove (e);
-    free (entry);
-  }
-}
-
 /* Free the current process's resources and then exit the underlying thread. */
 void
 process_exit (int exit_code)
@@ -414,9 +399,9 @@ process_exit (int exit_code)
         file_close(cur->executable_file);
       }
 
-      clean_child_entries(exit_code);
+      clean_child_entries (exit_code);
 
-      clean_opened_files();
+      free_fd_table (&cur->fd_table);
 
       /* Destroy the current process's page directory and switch back
          to the kernel-only page directory. */

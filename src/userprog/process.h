@@ -4,6 +4,7 @@
 #include "threads/thread.h"
 #include "list.h"
 #include "threads/synch.h"
+#include "userprog/fd_table.h"
 
 #define PROC_SUCC (0)  /* Exit code for normal process termination. */
 #define PROC_ERR (-1)  /* Exit code for erroneous process termination. */
@@ -11,14 +12,6 @@
 #define WORD_BYTES (sizeof(uint32_t)/sizeof(uint8_t))
 #define BYTE_SIZE sizeof(uint8_t *)
 typedef int pid_t;
-
-/* An entry in the fd_table. */
-struct fd_entry
-  {
-    int fd; /* File descriptor. */
-    struct file* file; /* File which can be handled by file.c. */
-    struct list_elem elem; /* List element for doubly-linked td_table list. */
-  };
 
 /* A user process, wrapped around a kernel thread. */
 struct process
@@ -28,7 +21,7 @@ struct process
     bool recover_flag;      /* Indicates whether the page fault
                                needs to be recovered from, without
                                causing kernel panic */
-    struct list fd_table;   /* List of file descriptors to file structs. */
+    struct fd_table fd_table;   /* List of file descriptors to file structs. */
     
     /* Each process is allocated a child_process_entry
        This allows communication with
