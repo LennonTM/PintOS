@@ -136,25 +136,6 @@ check_valid_string (const char *string) {
   return false;
 }
 
-/* Verify that the buffer of specified length is valid user memory */
-static bool
-check_valid_buffer(const char *buffer, unsigned length) {
-  const char *p = buffer;
-  int byte;
-  const char *p_end = p + length;
-  while ((void *) p < PHYS_BASE) {
-    byte = get_user((const uint8_t *) p);
-    if (byte == -1) {
-      return false;
-    }
-    if (p >= p_end) {
-      return true;
-    }
-    p++;
-  }
-  return false;
-}
-
 /* Terminates PintOS by calling shutdown_power_off */
 static void 
 halt (void) {
@@ -190,7 +171,7 @@ static void
 handle_exec (void *esp, uint32_t *eax UNUSED) {
   char *cmd_line = (char *) parse_argument(&esp);
   if (!check_valid_string(cmd_line)) {
-    exit(PROC_ERR);
+    process_exit(PROC_ERR);
   }
   pid_t res = exec(cmd_line);
   *eax = res;
@@ -395,9 +376,6 @@ handle_write (void *esp, uint32_t *eax) {
   int fd = (int) parse_argument(&esp);
   const void *buffer = (const void *) parse_argument(&esp);
   unsigned length = (unsigned) parse_argument(&esp);
-  if (!check_valid_buffer(buffer, length)) {
-    exit(PROC_ERR);
-  }
   *eax = write(fd, buffer, length);
 }
 
@@ -474,7 +452,7 @@ syscall_handler (struct intr_frame *f)
   void *esp_cpy = f->esp;
   uint32_t syscall_num = (uint32_t) parse_argument(&esp_cpy);
   if (syscall_num >= TOTAL_SYSCALLS) {
-    exit(PROC_ERR);
+    process_exit(PROC_ERR);
   }
   handlers[syscall_num](esp_cpy, &f->eax);
 }
