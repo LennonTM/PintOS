@@ -333,33 +333,28 @@ handle_read (void *esp, uint32_t *eax) {
   *eax = read(fd, buffer, length);
 }
 
-/* Writes length bytes from buffer to open file fd. 
-   Returns number of bytes actually written */
-static int 
-write (int fd, const void *buffer, unsigned length) {
-  if (fd == STDIN_FILENO) {
-    return -1;
-  }
-  if (fd == STDOUT_FILENO) {
-    unsigned length_copy = length;
-    while (length > 0) {
-      unsigned buf_length = min(length, KERNEL_BUF_SIZE);
-      char kernel_buf[KERNEL_BUF_SIZE];
-      /* Safely copy data from user buffer */
-      if (!copy_from_user_buf(buffer, kernel_buf, buf_length)) {
-        /* No resources allocated, safe to exit */
-        process_exit(PROC_ERR);
-      }
-      putbuf(kernel_buf, buf_length);
-      length -= buf_length;
-      buffer += buf_length;
+/* Helper function for write syscall
+   writes length bytes to STDOUT */
+static int
+write_to_stdout (const void *buffer, unsigned length) {
+  unsigned length_copy = length;
+  while (length > 0) {
+    unsigned buf_length = min(length, KERNEL_BUF_SIZE);
+    char kernel_buf[KERNEL_BUF_SIZE];
+    /* Safely copy data from user buffer */
+    if (!copy_from_user_buf(buffer, kernel_buf, buf_length)) {
+      /* No resources allocated, safe to exit */
+      process_exit(PROC_ERR);
     }
-    return length_copy;
+    putbuf(kernel_buf, buf_length);
+    length -= buf_length;
+    buffer += buf_length;
   }
-  struct file* file = get_file (&thread_current()->process->fd_table, fd);
-  if (file == NULL) {
-    return -1;
-  }
+  return length_copy;
+}
+
+static int
+write_to_file (struct file *file, const void *buffer, unsigned length) {
   off_t total_bytes_written = 0;
   while (length > 0) {
     unsigned buf_length = min(length, KERNEL_BUF_SIZE);
@@ -376,6 +371,23 @@ write (int fd, const void *buffer, unsigned length) {
 
   }
   return total_bytes_written;
+}
+
+/* Writes length bytes from buffer to open file fd. 
+   Returns number of bytes actually written */
+static int 
+write (int fd, const void *buffer, unsigned length) {
+  if (fd == STDIN_FILENO) {
+    return -1;
+  }
+  if (fd == STDOUT_FILENO) {
+    return write_to_stdout (buffer, length);
+  }
+  struct file* file = get_file (&thread_current()->process->fd_table, fd);
+  if (file == NULL) {
+    return -1;
+  }
+  return write_to_file (file, buffer, length);
 }
 
 static void
