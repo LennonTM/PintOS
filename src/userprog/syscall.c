@@ -17,9 +17,12 @@ static void syscall_handler (struct intr_frame *);
 /* Type of a specific system call handler helper function
    Each handler takes the frame, gets the arguments
    and calls corresponding system call implementation */
-typedef void (*handle_syscall)(uint8_t *esp, uint32_t *eax);
+typedef void (*handle_syscall)(void *esp, uint32_t *eax);
 
 static void NO_RETURN exit (int status);
+
+#define KERNEL_BUF_SIZE 256
+#define min(x, y) ((x) < (y) ? (x) : (y))
 
 /* Reads a byte at user virtual address UADDR.
    UADDR must be below PHYS_BASE.
@@ -50,32 +53,67 @@ put_user (uint8_t *udst, uint8_t byte)
   return error_code != -1;
 }
 
-/* Read a 32 bit word from address uaddr into result
-   return false for invalid user memory */
+/* Copies data of specified length from kernel spcae buffer to
+   user space buffer.
+   returns false if invalid user memory is accessed */
 static bool
-get_user_word (const uint8_t *uaddr, uint32_t *result) {
-  *result = 0;
-  for (size_t i = 0; i < WORD_BYTES; i++) {
-    const uint8_t *byte_addr = uaddr + i;
-    int byte = get_user(byte_addr);
-    if ((void *) byte_addr >= PHYS_BASE || byte == -1) {
+copy_to_user_buf (const void *kernel_buf_, void *user_buf_, size_t length) {
+  /* Verify that the buffer is within user space */
+  if (user_buf_ + length >= PHYS_BASE) {
+    return false;
+  }
+  const uint8_t *kernel_buf = (const uint8_t *) kernel_buf_;
+  uint8_t *user_buf = (uint8_t *) user_buf_;
+  for (size_t i = 0; i < length; i++) {
+    if (!put_user(user_buf, *kernel_buf)) {
       return false;
     }
-    *result |= (byte << (i * sizeof(uint8_t) * 8));
+    user_buf++;
+    kernel_buf++;
   }
   return true;
 }
 
+/* Copies data of specified length from user spcae buffer to
+   kernel space buffer.
+   return false if user memory is invalid at some point */
+static bool
+copy_from_user_buf (const void *user_buf_, void *kernel_buf_, size_t length) {
+  /* Verify that the buffer is within user space */
+  if (user_buf_ + length >= PHYS_BASE) {
+    return false;
+  }
+  uint8_t *kernel_buf = (uint8_t *) kernel_buf_;
+  const uint8_t *user_buf = (const uint8_t *) user_buf_;
+  for (size_t i = 0; i < length; i++) {
+    int byte = get_user(user_buf);
+    if (byte == -1) {
+      return false;
+    }
+    *kernel_buf = (uint8_t) byte;
+    user_buf++;
+    kernel_buf++;
+  }
+  return true;
+}
+
+/* Read a 32 bit word from address uaddr into result
+   return false for invalid user memory */
+static bool
+get_user_word (const void *uaddr, uint32_t *result) {
+  return copy_from_user_buf(uaddr, (void *) result, WORD_BYTES);
+}
+
 /* Parse a 32 bit argument stored on the user stack at address *uaddr,
-   if invalid memory is accessed, handle the fault
-   (in this case exit with an error message)
+   if invalid memory is accessed, the process is terminated with PROC_ERR.
+   must be used cautiously, because any resources such as locks / memory
+   will not be freed
    otherwise, increment the stack pointer by 4 bytes and return the argument */
 static uint32_t
-parse_argument (uint8_t ** uaddr) {
+parse_argument (void **uaddr) {
   uint32_t result;
   if (!get_user_word(*uaddr, &result)) {
-    exit(PROC_ERR);
-    NOT_REACHED ();
+    process_exit(PROC_ERR);
   }
   *uaddr += WORD_BYTES;
   return result;
@@ -83,7 +121,7 @@ parse_argument (uint8_t ** uaddr) {
 
 /* Verify if string points to a valid string in user memory */
 static bool
-check_valid_string(const char *string) {
+check_valid_string (const char *string) {
   const char *p = string;
   while ((void *) p < PHYS_BASE) {
     int byte = get_user((const uint8_t *) p);
@@ -124,8 +162,7 @@ halt (void) {
 }
 
 static void
-handle_halt(uint8_t *esp UNUSED, uint32_t *eax UNUSED) {
-  printf("Handler: handle_halt called\n");
+handle_halt(void *esp UNUSED, uint32_t *eax UNUSED) {
   halt();
 }
 
@@ -136,7 +173,7 @@ exit (int status) {
 }
 
 static void 
-handle_exit (uint8_t *esp, uint32_t *eax UNUSED) {
+handle_exit (void *esp, uint32_t *eax UNUSED) {
   int status = (int) parse_argument(&esp);
   exit(status);
 }
@@ -150,7 +187,7 @@ exec (const char *cmd_line) {
 }
 
 static void
-handle_exec (uint8_t *esp, uint32_t *eax UNUSED) {
+handle_exec (void *esp, uint32_t *eax UNUSED) {
   char *cmd_line = (char *) parse_argument(&esp);
   if (!check_valid_string(cmd_line)) {
     exit(PROC_ERR);
@@ -166,7 +203,7 @@ wait (pid_t wait_pid) {
 }
 
 static void
-handle_wait (uint8_t *esp, uint32_t *eax) {
+handle_wait (void *esp, uint32_t *eax) {
   pid_t wait_pid = (pid_t) parse_argument(&esp);
   *eax = wait(wait_pid);
 }
@@ -180,7 +217,7 @@ create (const char *file, unsigned initial_size) {
 }
 
 static void
-handle_create (uint8_t *esp, uint32_t *eax) {
+handle_create (void *esp, uint32_t *eax) {
   char *file = (char *) parse_argument(&esp);
   unsigned initial_size = (unsigned) parse_argument(&esp);
   if (!check_valid_string(file)) {
@@ -196,7 +233,7 @@ remove (const char *file) {
 }
 
 static void
-handle_remove (uint8_t *esp, uint32_t *eax) {
+handle_remove (void *esp, uint32_t *eax) {
   char *file = (char *) parse_argument(&esp);
   *eax = remove(file);
 }
@@ -213,7 +250,7 @@ open (const char *file_name) {
 }
 
 static void
-handle_open (uint8_t *esp, uint32_t *eax) {
+handle_open (void *esp, uint32_t *eax) {
   char *file = (char *) parse_argument(&esp);
   if (!check_valid_string(file))
     exit(PROC_ERR);
@@ -229,7 +266,7 @@ filesize (int fd) {
 }
 
 static void
-handle_filesize (uint8_t *esp, uint32_t *eax) {
+handle_filesize (void *esp, uint32_t *eax) {
   int fd = (int) parse_argument(&esp);
   *eax = filesize(fd);
 }
@@ -237,34 +274,47 @@ handle_filesize (uint8_t *esp, uint32_t *eax) {
 /* Reads size bytes from the file open as fd into buffer. Returns
    number of bytes actually read. Returns -1 if there is an error
    in getting open file.*/
-static int 
-read (int fd, void *buffer_, unsigned length) {
+static int
+read (int fd, void *buffer, unsigned length) {
   if (fd == STDOUT_FILENO) {
     return -1;
   }
-  char* buffer = (char*) buffer_;
   if (fd == STDIN_FILENO) {
-    for (unsigned i = 0; i<length; i++) {
-      *buffer++ = input_getc();
+    for (size_t i = 0; i < length; i++) {
+      if (!put_user(buffer++, input_getc())) {
+        process_exit(PROC_ERR);
+      }
     }
     return length;
   }
-  else {
-    struct file* file = get_file (&thread_current()->process->fd_table, fd);
-    if (file == NULL)
-      return -1;
-    return file_read (file, buffer, length);
+  struct fd_table *fd_table = &thread_current()->process->fd_table;
+  struct file* file = get_file (fd_table, fd);
+  if (file == NULL) {
+    return -1;
   }
+  off_t total_bytes_read = 0;
+  /* Break up user buffer into smaller chunks of KERNEL_BUF_SIZE */
+  while (length > 0) {
+    unsigned buf_length = min(length, KERNEL_BUF_SIZE);
+    uint8_t kernel_buf[KERNEL_BUF_SIZE];
+    /* Safely copy data from uesr buffer */
+    off_t bytes_read = file_read(file, kernel_buf, buf_length);
+    if (!copy_to_user_buf(kernel_buf, buffer, bytes_read)) {
+      /* No resources allocated, safe to exit */
+      process_exit(PROC_ERR);
+    }
+    length -= buf_length;
+    buffer += buf_length;
+    total_bytes_read += bytes_read;
+  }
+  return total_bytes_read;
 }
 
 static void
-handle_read (uint8_t *esp, uint32_t *eax) {
+handle_read (void *esp, uint32_t *eax) {
   int fd = (int) parse_argument(&esp);
   void* buffer = (void*) parse_argument(&esp);
   unsigned length = (unsigned) parse_argument(&esp);
-  if (!check_valid_buffer(buffer, length)) {
-    exit(PROC_ERR);
-  }
   *eax = read(fd, buffer, length);
 }
 
@@ -279,25 +329,18 @@ write (int fd, const void *buffer_, unsigned length) {
     return -1;
   }
   if (fd == STDOUT_FILENO) {
-    for (int char_left = length; char_left > 0; char_left -= MAX_WRITE_LENGTH)
-    {
-      size_t put_length = 
-        (char_left < MAX_WRITE_LENGTH) ? char_left : MAX_WRITE_LENGTH;
-      putbuf(buffer, put_length);
-    }
+    putbuf(buffer, length);
     return length;
   }
-  else {
-    struct file* file = get_file (&thread_current()->process->fd_table, fd);
-    if (file == NULL) {
-      return -1;
-    }
-    return file_write(file, buffer, length);
+  struct file* file = get_file (&thread_current()->process->fd_table, fd);
+  if (file == NULL) {
+    return -1;
   }
+  return file_write(file, buffer, length);
 }
 
 static void
-handle_write (uint8_t *esp, uint32_t *eax) {
+handle_write (void *esp, uint32_t *eax) {
   int fd = (int) parse_argument(&esp);
   const void *buffer = (const void *) parse_argument(&esp);
   unsigned length = (unsigned) parse_argument(&esp);
@@ -316,7 +359,7 @@ seek (int fd, unsigned position) {
 }
 
 static void
-handle_seek (uint8_t *esp, uint32_t *eax UNUSED) {
+handle_seek (void *esp, uint32_t *eax UNUSED) {
   int fd = (int) parse_argument(&esp);
   unsigned position = (unsigned) parse_argument(&esp);
   seek(fd, position);
@@ -331,7 +374,7 @@ tell (int fd) {
 }
 
 static void
-handle_tell (uint8_t *esp, uint32_t *eax) {
+handle_tell (void *esp, uint32_t *eax) {
   int fd = (int) parse_argument(&esp);
   *eax = tell(fd);
 }
@@ -345,7 +388,7 @@ close (int fd) {
 }
 
 static void
-handle_close (uint8_t *esp, uint32_t *eax UNUSED) {
+handle_close (void *esp, uint32_t *eax UNUSED) {
   int fd = (int) parse_argument(&esp);
   close(fd);
 }
@@ -377,7 +420,7 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f) 
 {
-  uint8_t *esp_cpy = f->esp;
+  void *esp_cpy = f->esp;
   uint32_t syscall_num = (uint32_t) parse_argument(&esp_cpy);
   if (syscall_num >= TOTAL_SYSCALLS) {
     exit(PROC_ERR);
