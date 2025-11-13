@@ -297,14 +297,14 @@ read (int fd, void *buffer, unsigned length) {
   while (length > 0) {
     unsigned buf_length = min(length, KERNEL_BUF_SIZE);
     uint8_t kernel_buf[KERNEL_BUF_SIZE];
-    /* Safely copy data from uesr buffer */
+    /* Safely copy data to user buffer */
     off_t bytes_read = file_read(file, kernel_buf, buf_length);
     if (!copy_to_user_buf(kernel_buf, buffer, bytes_read)) {
       /* No resources allocated, safe to exit */
       process_exit(PROC_ERR);
     }
     length -= buf_length;
-    buffer += buf_length;
+    buffer += bytes_read;
     total_bytes_read += bytes_read;
   }
   return total_bytes_read;
@@ -318,8 +318,6 @@ handle_read (void *esp, uint32_t *eax) {
   *eax = read(fd, buffer, length);
 }
 
-#define MAX_WRITE_LENGTH 256
-
 /* Writes length bytes from buffer to open file fd. 
    Returns number of bytes actually written */
 static int 
@@ -332,7 +330,7 @@ write (int fd, const void *buffer, unsigned length) {
     while (length > 0) {
       unsigned buf_length = min(length, KERNEL_BUF_SIZE);
       char kernel_buf[KERNEL_BUF_SIZE];
-      /* Safely copy data from uesr buffer */
+      /* Safely copy data from user buffer */
       if (!copy_from_user_buf(buffer, kernel_buf, buf_length)) {
         /* No resources allocated, safe to exit */
         process_exit(PROC_ERR);
@@ -347,7 +345,22 @@ write (int fd, const void *buffer, unsigned length) {
   if (file == NULL) {
     return -1;
   }
-  return file_write(file, buffer, length);
+  off_t total_bytes_written = 0;
+  while (length > 0) {
+    unsigned buf_length = min(length, KERNEL_BUF_SIZE);
+    char kernel_buf[KERNEL_BUF_SIZE];
+    /* Safely copy data from user buffer */
+    if (!copy_from_user_buf(buffer, kernel_buf, buf_length)) {
+      /* No resources allocated, safe to exit */
+      process_exit(PROC_ERR);
+    }
+    off_t bytes_written = file_write(file, kernel_buf, buf_length);
+    total_bytes_written += bytes_written;
+    length -= buf_length;
+    buffer += bytes_written;
+
+  }
+  return total_bytes_written;
 }
 
 static void
