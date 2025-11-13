@@ -30,7 +30,7 @@ static void handle_entry_destruction(
   bool is_parent);
 
 struct start_process_args {
-  char *cmd_line_cpy;
+  char *cmd_line_copy;
   struct child_to_parent_entry *child_entry;
 };
 
@@ -67,7 +67,6 @@ child_entry_init(struct child_to_parent_entry* entry) {
 tid_t
 process_execute (const char *cmd_line) 
 {
-  void *ptr_and_cmd_cpy;
   char *cmd_line_copy;
   tid_t tid;
 
@@ -78,19 +77,25 @@ process_execute (const char *cmd_line)
     return TID_ERROR;
   child_entry_init(entry);
 
-  /* Allocate a page for */
-  ptr_and_cmd_cpy = palloc_get_page (0);
-  if (ptr_and_cmd_cpy == NULL)
+  /* Arguments to start_process
+     The struct must always be freed when
+     the process successfully loads */
+  struct start_process_args *start_process_args =
+    malloc (sizeof(struct start_process_args));
+  if (start_process_args == NULL)
     return TID_ERROR;
 
-  /* Pointer to child process entry */
-  void **ptr = (void **)ptr_and_cmd_cpy;
-  *ptr = entry;
-
+  /* Allocate a page for cmd_line_cpy 
+     Must always be freed when process successfully loads */
+  cmd_line_copy = palloc_get_page (0);
+  if (cmd_line_copy == NULL)
+    return TID_ERROR;
   /* Make a copy of CMD_LINE.
      Otherwise there's a race between the caller and load(). */
-  cmd_line_copy = (char *)ptr_and_cmd_cpy + WORD_BYTES;
-  strlcpy (cmd_line_copy, cmd_line, PGSIZE - WORD_BYTES);
+  strlcpy (cmd_line_copy, cmd_line, PGSIZE);
+
+  start_process_args->cmd_line_copy = cmd_line_copy;
+  start_process_args->child_entry = entry;
 
   /* Threads share a limit of 16 characters */
   /* Parse thread_name */
@@ -109,7 +114,7 @@ process_execute (const char *cmd_line)
     thread_name, 
     PRI_DEFAULT, 
     start_process,
-    ptr_and_cmd_cpy);
+    start_process_args);
 
   /* Wait until the process exits or successfully loads */
   sema_down(&entry->sema);
@@ -121,8 +126,9 @@ process_execute (const char *cmd_line)
      free the auxiliary data */
   if (!entry->loading_succeeded) {
     bool is_parent = true;
-    handle_entry_destruction(entry, is_parent);
-    palloc_free_page (ptr_and_cmd_cpy);
+    handle_entry_destruction (entry, is_parent);
+    palloc_free_page (cmd_line_copy);
+    free (start_process_args);
     return TID_ERROR;
   }
 
@@ -183,6 +189,10 @@ static void write_pointer_to_stack(void **esp, void *ptr) {
 static void
 start_process (void *args_)
 {
+  struct start_process_args* args = (struct start_process_args *) args_;
+  struct child_to_parent_entry *entry = args->child_entry;
+  char *cmd_line = args->cmd_line_copy;
+
   struct thread *cur = thread_current ();
 
   /* for loop to calculate the following
@@ -194,11 +204,9 @@ start_process (void *args_)
   int argc = 0;
   bool is_arg = false;
 
-  char *args = (char *)args_ + WORD_BYTES;
-
   /* args_len increases as we traverse the string */
-  for (; args[args_len] != '\0'; args_len++) {
-    if (args[args_len] == ' ') {
+  for (; cmd_line[args_len] != '\0'; args_len++) {
+    if (cmd_line[args_len] == ' ') {
       /* whitespace, then increment space_count */
       space_count++;
       is_arg = false;
@@ -214,7 +222,7 @@ start_process (void *args_)
   /* begin tokenising args_
    * filename is the first argument */
   char *save_ptr;
-  char *token = strtok_r (args, " ", &save_ptr);
+  char *token = strtok_r (cmd_line, " ", &save_ptr);
 
   char *file_name = token;
   struct intr_frame if_;
@@ -223,8 +231,6 @@ start_process (void *args_)
   /* Initialise process. */
   success = process_init (cur);
   /* Handle child_process_entry  */
-  struct child_to_parent_entry *entry = 
-    *(struct child_to_parent_entry **)args_;
   cur->process->entry = entry;
 
   if (success)
@@ -239,7 +245,7 @@ start_process (void *args_)
 
   /* If load failed, terminate the process. */
   if (!success) {
-    process_exit (PROC_ERR); // entry->return_value == -1
+    process_exit (PROC_ERR);
   }
 
   /* push arguments onto the stack */
@@ -258,7 +264,8 @@ start_process (void *args_)
   /* set new stack pointer */
   if_.esp = esp_ptr - 3 * WORD_BYTES;
 
-  /* Exit if the user stack exceeds one page after arument parsing */
+  /* Exit if the user stack exceeds one page
+     after arument parsing and before writing any data */
   if (if_.esp < PHYS_BASE - PGSIZE) {
     process_exit(PROC_ERR);
   }
@@ -277,8 +284,11 @@ start_process (void *args_)
   write_int_to_stack(&esp_cpy, argc);
   write_pointer_to_stack(&esp_cpy, esp_ptr_cpy);
 
-  /* After loading, we are done with the command-line copy passed to us by process_execute. */
-  palloc_free_page (args_);
+  /* After loading, we are done with
+     - the command-line copy passed to us by process_execute.
+     - and the start_process_args struct */
+  palloc_free_page (cmd_line);
+  free (args);
 
   entry->loading_succeeded = true;
   sema_up(&entry->sema);
