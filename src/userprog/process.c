@@ -46,14 +46,16 @@ root_process_init (void)
     PANIC("Unable to initialise root OS process.");
 }
 
-/* Handles the initialisation a child_to_parent_entry */
+/* Handles the initialisation of child_to_parent_entry
+   assuming that the caller is the parent in this
+   child to parent link */
 static void
 child_entry_init(struct child_to_parent_entry* entry) {
-  /* Parent process needs a pointer to child_process_entry */
   struct process *parent_process = thread_current()->process;
+  /* Keep the list of all child_to_parent_entries for each parent */
   list_push_front(&parent_process->child_entries, &entry->child_elem);
 
-  /* initialise flags, and synchronisation primitives */
+  /* Initialise flags and synchronisation primitives */
   entry->parent_finished = false;
   entry->child_finished = false;
   entry->loading_succeeded = false;
@@ -90,21 +92,20 @@ process_execute (const char *cmd_line)
   cmd_line_copy = palloc_get_page (0);
   if (cmd_line_copy == NULL)
     return TID_ERROR;
-  /* Make a copy of CMD_LINE.
-     Otherwise there's a race between the caller and load(). */
+  /* Make a copy of CMD_LINE to avoid race condition
+     between the caller and load() */
   strlcpy (cmd_line_copy, cmd_line, PGSIZE);
 
   start_process_args->cmd_line_copy = cmd_line_copy;
   start_process_args->child_entry = entry;
 
-  /* Threads share a limit of 16 characters */
   /* Parse thread_name */
   char thread_name[MAX_NAME_LENGTH];
-  /* find the first non-whitespace character */
+  /* Find the first non-whitespace character */
   char *cmd_line_ptr = cmd_line_copy;
   while (*cmd_line_ptr == ' ')
     cmd_line_ptr++;
-  /* copy MAX_NAME_LENGTH characters and tokenise it to remove whitespace */
+  /* Copy MAX_NAME_LENGTH characters and tokenise it to remove whitespace */
   char *save_ptr;
   strlcpy (thread_name, cmd_line, MAX_NAME_LENGTH);
   strtok_r (thread_name, " ", &save_ptr);
@@ -159,33 +160,34 @@ process_init (struct thread *t)
   return true;
 }
 
-/* writes int to stack and increments the esp
-   unlike pushing to the stack, this grows upwards*/
+/* Writes int to stack and increments the esp
+   unlike pushing to the stack, this grows upwards */
 static void write_int_to_stack(void **esp, int n) {
   int *esp_int = (int *)*esp;
   *esp_int = n;
-  *esp = (char *)(*esp) + sizeof(n);
+  *esp += sizeof(int);
 }
+
 /* writes string to stack and increments the esp
    unlike pushing to the stack, this grows upwards*/
 static void write_string_to_stack(void **esp, char *str) {
   char *esp_str = (char *)*esp;
   int str_len = strlen(str);
   strlcpy(esp_str, str, str_len + 1);
-  *esp = (char *)(*esp) + (str_len + 1) * sizeof(char);
+  *esp += (str_len + 1) * sizeof(char);
 }
+
 /* writes pointer to stack and increments the esp
    unlike pushing to the stack, this grows upwards*/
 static void write_pointer_to_stack(void **esp, void *ptr) {
   void **esp_ptr = (void **)*esp;
   *esp_ptr = ptr;
-  *esp = (char *)(*esp) + sizeof(ptr);
+  *esp += sizeof(void *);
 }
 
 
-/* A thread function that loads a user process and starts it
-   running.
-   Args contains a pointer to a child_process_entry followed by cmd_line_cpy */
+/* A thread function that loads a user process and starts running it.
+   args_ is an address of start_process_args struct */
 static void
 start_process (void *args_)
 {
