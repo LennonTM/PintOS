@@ -323,14 +323,25 @@ handle_read (void *esp, uint32_t *eax) {
 /* Writes length bytes from buffer to open file fd. 
    Returns number of bytes actually written */
 static int 
-write (int fd, const void *buffer_, unsigned length) {
-  const char *buffer = buffer_;
+write (int fd, const void *buffer, unsigned length) {
   if (fd == STDIN_FILENO) {
     return -1;
   }
   if (fd == STDOUT_FILENO) {
-    putbuf(buffer, length);
-    return length;
+    unsigned length_copy = length;
+    while (length > 0) {
+      unsigned buf_length = min(length, KERNEL_BUF_SIZE);
+      char kernel_buf[KERNEL_BUF_SIZE];
+      /* Safely copy data from uesr buffer */
+      if (!copy_from_user_buf(buffer, kernel_buf, buf_length)) {
+        /* No resources allocated, safe to exit */
+        process_exit(PROC_ERR);
+      }
+      putbuf(kernel_buf, buf_length);
+      length -= buf_length;
+      buffer += buf_length;
+    }
+    return length_copy;
   }
   struct file* file = get_file (&thread_current()->process->fd_table, fd);
   if (file == NULL) {
