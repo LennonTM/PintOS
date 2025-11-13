@@ -19,8 +19,6 @@ static void syscall_handler (struct intr_frame *);
    and calls corresponding system call implementation */
 typedef void (*handle_syscall)(void *esp, uint32_t *eax);
 
-static void NO_RETURN exit (int status);
-
 #define KERNEL_BUF_SIZE 256
 #define min(x, y) ((x) < (y) ? (x) : (y))
 
@@ -202,7 +200,7 @@ handle_create (void *esp, uint32_t *eax) {
   char *file = (char *) parse_argument(&esp);
   unsigned initial_size = (unsigned) parse_argument(&esp);
   if (!check_valid_string(file)) {
-    exit(PROC_ERR);
+    process_exit(PROC_ERR);
   }
   *eax = create(file, initial_size);
 }
@@ -234,7 +232,7 @@ static void
 handle_open (void *esp, uint32_t *eax) {
   char *file = (char *) parse_argument(&esp);
   if (!check_valid_string(file))
-    exit(PROC_ERR);
+    process_exit(PROC_ERR);
   *eax = open(file);
 }
 
