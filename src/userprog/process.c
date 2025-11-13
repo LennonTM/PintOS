@@ -305,10 +305,18 @@ start_process (void *args_)
   NOT_REACHED ();
 }
 
-/* Will destroy itself if both of the following occur
-   1. Parent has exited or parent finished waiting
-   2. Child has exited
-   Returns true if the child process destroyed */
+/* This function is called when
+   - is_parent = true: parent no longer needs access to the entry when:
+     * parent exits
+     * child fails to load successfully
+     * parent finishes waiting for a child
+   - is_parent = false: child no longer needs access to the entry when:
+     * child exits
+
+   When both flags get set, the entry is freed
+   It is not safe to refer to the entry after
+   calling this function, since at any point, the entry
+   can be freed by another process */
 static void
 handle_entry_destruction(
   struct child_to_parent_entry *entry, 
@@ -321,16 +329,17 @@ handle_entry_destruction(
   if (is_parent) {
     entry->parent_finished = true;
   } else {
+    /* When child finishes, up the semaphore to wake up a waiting parent */
+    sema_up(&entry->sema);
     entry->child_finished = true;
   }
-
   /* Check whether we should destroy the entry */
   bool destroy_self = entry->parent_finished && entry->child_finished;
-  if (!destroy_self) {
-    sema_up(&entry->sema);
-  }
+
   lock_release(&entry->lock);
 
+  /* Since the flags are modified atomically, only
+     one process will have destroy_self = true */
   if (destroy_self) {
     list_remove(&entry->child_elem);
     free(entry);
@@ -342,16 +351,13 @@ handle_entry_destruction(
  * returns -1.  
  * If TID is invalid or if it was not a child of the calling process, or if 
  * process_wait() has already been successfully called for the given TID, 
- * returns -1 immediately, without waiting.
- * 
- * This function will be implemented in task 2.
- * For now, it does nothing. */
+ * returns -1 immediately, without waiting. */
 int
 process_wait (tid_t child_tid ) 
 {
   struct process *cur = thread_current()->process;
   struct list_elem *e;
-  /* find the correct child */
+  /* Find the correct child */
   for (
       e = list_begin (&cur->child_entries); 
       e != list_end (&cur->child_entries); 
@@ -361,20 +367,25 @@ process_wait (tid_t child_tid )
       list_entry (e, struct child_to_parent_entry, child_elem);
     /* pid is defined to be equal to tid */
     if (entry->pid == child_tid) {
-      /* child found */
+      /* Child found */
       sema_down(&entry->sema);
+      ASSERT (entry->child_finished);
       int result = entry->return_value;
+      /* Destroy the entry to avoid parent waiting for the
+         same child process multiple times */
       bool is_parent = true;
       handle_entry_destruction(entry, is_parent);
       return result;
     }
   }
-  /* child not found */
+  /* Child not found */
   return PROC_ERR;
 }
 
+/* Clean up child_to_parent entries that the exiting
+   process participates in both as a child and as a parent */
 static void
-clean_child_entries(int exit_code) {
+clean_child_to_parent_entries (int exit_code) {
   struct process *cur = thread_current()->process;
   ASSERT (cur != NULL);
   struct child_to_parent_entry *entry = cur->entry;
@@ -420,7 +431,7 @@ process_exit (int exit_code)
         file_close(cur->executable_file);
       }
 
-      clean_child_entries (exit_code);
+      clean_child_to_parent_entries (exit_code);
 
       free_fd_table (&cur->fd_table);
 
