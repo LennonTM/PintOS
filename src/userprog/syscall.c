@@ -57,7 +57,7 @@ put_user (uint8_t *udst, uint8_t byte)
 static bool
 copy_to_user_buf (const void *kernel_buf_, void *user_buf_, size_t length) {
   /* Verify that the buffer is within user space */
-  if (user_buf_ + length >= PHYS_BASE) {
+  if (!is_user_vaddr(user_buf_ + length)) {
     return false;
   }
   const uint8_t *kernel_buf = (const uint8_t *) kernel_buf_;
@@ -78,7 +78,7 @@ copy_to_user_buf (const void *kernel_buf_, void *user_buf_, size_t length) {
 static bool
 copy_from_user_buf (const void *user_buf_, void *kernel_buf_, size_t length) {
   /* Verify that the buffer is within user space */
-  if (user_buf_ + length >= PHYS_BASE) {
+  if (!is_user_vaddr(user_buf_ + length)) {
     return false;
   }
   uint8_t *kernel_buf = (uint8_t *) kernel_buf_;
@@ -121,7 +121,7 @@ parse_argument (void **uaddr) {
 static bool
 check_valid_string (const char *string) {
   const char *p = string;
-  while ((void *) p < PHYS_BASE) {
+  while (is_user_vaddr(p)) {
     int byte = get_user((const uint8_t *) p);
     if (byte == -1) {
       return false;
