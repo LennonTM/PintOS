@@ -304,14 +304,13 @@ handle_entry_destruction(
 
   /* Check whether we should destroy the entry */
   bool destroy_self = entry->parent_flag && entry->child_flag;
-  if (destroy_self) {
-    list_remove(&entry->child_entry);
-  } else {
+  if (!destroy_self) {
     sema_up(&entry->sema);
   }
   lock_release(&entry->lock);
 
   if (destroy_self) {
+    list_remove(&entry->child_entry);
     free(entry);
   }
 }
