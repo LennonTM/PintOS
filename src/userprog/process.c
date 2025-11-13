@@ -25,6 +25,11 @@ static bool process_init (struct thread *t);
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
+struct start_process_args {
+  char *cmd_line_cpy;
+  struct child_to_parent *child_entry;
+};
+
 /* Initialises the main thread as a minimal root OS process.
    Note that when this thread/process terminates, the OS will shutdown. */
 void
@@ -39,14 +44,14 @@ root_process_init (void)
 
 /* Handles the parent side of initialising a child_process_entry */
 static void
-child_entry_init(struct child_process_entry* entry) {
+child_entry_init(struct child_to_parent* entry) {
   /* Parent process needs a pointer to child_process_entry */
   struct process *parent_process = thread_current()->process;
-  list_push_front(&parent_process->child_entries, &entry->child_entry);
+  list_push_front(&parent_process->child_entries, &entry->child_elem);
 
   /* initialise flags, and synchronisation primitives */
-  entry->parent_flag = false;
-  entry->child_flag = false;
+  entry->parent_finished = false;
+  entry->child_finished = false;
   entry->loading_succeeded = false;
   sema_init(&entry->sema, 0);
   lock_init(&entry->lock);
@@ -63,8 +68,8 @@ process_execute (const char *cmd_line)
   tid_t tid;
 
   /* Create child process entry to communicate with the parent */
-  struct child_process_entry* entry = 
-    malloc (sizeof(struct child_process_entry));
+  struct child_to_parent* entry = 
+    malloc (sizeof(struct child_to_parent));
   if (entry == NULL)
     return TID_ERROR;
   child_entry_init(entry);
@@ -102,7 +107,7 @@ process_execute (const char *cmd_line)
     start_process,
     ptr_and_cmd_cpy);
 
-  /* wait until the process exits, or successfully creates the thread */
+  /* Wait until the process exits or successfully loads */
   sema_down(&entry->sema);
 
   /* Pass tid */
@@ -111,7 +116,7 @@ process_execute (const char *cmd_line)
   /* If process loading failed (which includes TID_ERROR)
      free the auxiliary data */
   if (!entry->loading_succeeded) {
-    list_remove(&entry->child_entry);
+    list_remove(&entry->child_elem);
     free(entry);
     palloc_free_page (ptr_and_cmd_cpy);
     return TID_ERROR;
@@ -214,7 +219,7 @@ start_process (void *args_)
   /* Initialise process. */
   success = process_init (cur);
   /* Handle child_process_entry  */
-  struct child_process_entry *entry = *(struct child_process_entry **)args_;
+  struct child_to_parent *entry = *(struct child_to_parent **)args_;
   cur->process->entry = entry;
 
   if (success)
@@ -289,7 +294,7 @@ start_process (void *args_)
    Returns true if the child process destroyed */
 static void
 handle_entry_destruction(
-  struct child_process_entry *entry, 
+  struct child_to_parent *entry, 
   bool is_parent) 
 {
   /* only one process can access this entry's flags at once */
@@ -297,20 +302,20 @@ handle_entry_destruction(
 
   /* Set corresponding flag  */
   if (is_parent) {
-    entry->parent_flag = true;
+    entry->parent_finished = true;
   } else {
-    entry->child_flag = true;
+    entry->child_finished = true;
   }
 
   /* Check whether we should destroy the entry */
-  bool destroy_self = entry->parent_flag && entry->child_flag;
+  bool destroy_self = entry->parent_finished && entry->child_finished;
   if (!destroy_self) {
     sema_up(&entry->sema);
   }
   lock_release(&entry->lock);
 
   if (destroy_self) {
-    list_remove(&entry->child_entry);
+    list_remove(&entry->child_elem);
     free(entry);
   }
 }
@@ -335,8 +340,8 @@ process_wait (tid_t child_tid )
       e != list_end (&cur->child_entries); 
       e = list_next (e)) 
   {
-    struct child_process_entry *entry = 
-      list_entry (e, struct child_process_entry, child_entry);
+    struct child_to_parent *entry = 
+      list_entry (e, struct child_to_parent, child_elem);
     /* pid is defined to be equal to tid */
     if (entry->pid == child_tid) {
       /* child found */
@@ -355,7 +360,7 @@ static void
 clean_child_entries(int exit_code) {
   struct process *cur = thread_current()->process;
   ASSERT (cur != NULL);
-  struct child_process_entry *entry = cur->entry;
+  struct child_to_parent *entry = cur->entry;
 
   /* Pass exit_code before hand */
   entry->return_value = exit_code;
@@ -370,8 +375,8 @@ clean_child_entries(int exit_code) {
   struct list_elem *e = list_begin (&cur->child_entries);
   while (e != list_end (&cur->child_entries)) 
   {
-    struct child_process_entry *child_entry = 
-      list_entry (e, struct child_process_entry, child_entry);
+    struct child_to_parent *child_entry = 
+      list_entry (e, struct child_to_parent, child_elem);
     /* list_elem will get removed after handle_entry_destruction call,
        so access list_next beforehand */
     struct list_elem *e_next = list_next (e);

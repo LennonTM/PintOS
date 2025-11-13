@@ -26,7 +26,7 @@ struct process
     /* Each process is allocated a child_process_entry
        This allows communication with
        a waiting parent on exit */
-    struct child_process_entry *entry; 
+    struct child_to_parent *entry; 
     /* Lists all children entries of this process 
        This allows communication with all children. */
     struct list child_entries; 
@@ -36,31 +36,40 @@ struct process
 
 
 
-/* 3rd party to allow communication with waiting parent process */
-struct child_process_entry
+/* 3rd party struct to allow parent process
+   to wait for its children, and for a child process
+   to communicate its exit code to the parent
+   It represents child to parent link.
+
+   This struct is always stored on the heap
+   and gets destroyed only when both child and parent
+   are finished with it */
+struct child_to_parent
   {
-    /* Process id of this (the child) process */
-    pid_t pid;  
+    /* pid of the child process */
+    pid_t pid;
 
-    /* Flag that is set when the parent dies or has finished waiting */
-    bool parent_flag;
-    /* Flag that is set when the child process dies */  
-    bool child_flag;
-    /* Flag that is set when the child process dies */  
+    /* Flag gets set when the parent dies or finishes waiting */
+    bool parent_finished;
+    /* Flag gets set when the child process dies */
+    bool child_finished;
+    /* Flag that indicates whether child process loaded successfully
+       allows the parent to verify whether the load was successful or not */
     bool loading_succeeded;
-    
 
-    /* Performs synchronisation: the parent must wait until the child is dead */
+    /* Used for synchronisation in 2 cases:
+       - parent waiting for a child to finish
+       - parent waiting for a child to attempt to load */
     struct semaphore sema;
-    /* Mutual access on setting and checking flags 
-       in order to free this struct safely */       
-    struct lock lock;           
-    
+    /* Mutual access on setting and checking flags
+       in order to free this struct safely */
+    struct lock lock;
+ 
     /* Value to pass to the parent */
     uint32_t return_value;
-    
+
     /* An element in the parent's list of children */
-    struct list_elem child_entry; 
+    struct list_elem child_elem; 
   };
 
 void root_process_init (void);
