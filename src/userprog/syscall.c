@@ -271,27 +271,23 @@ handle_filesize (void *esp, uint32_t *eax) {
   *eax = filesize(fd);
 }
 
-/* Reads size bytes from the file open as fd into buffer. Returns
-   number of bytes actually read. Returns -1 if there is an error
-   in getting open file.*/
+
+/* Helper function for read sycall
+   reads length bytes from STDIN into buffer */
 static int
-read (int fd, void *buffer, unsigned length) {
-  if (fd == STDOUT_FILENO) {
-    return -1;
-  }
-  if (fd == STDIN_FILENO) {
-    for (size_t i = 0; i < length; i++) {
-      if (!put_user(buffer++, input_getc())) {
-        process_exit(PROC_ERR);
-      }
+read_from_stdin (void *buffer, unsigned length) {
+  for (size_t i = 0; i < length; i++) {
+    if (!put_user(buffer++, input_getc())) {
+      process_exit(PROC_ERR);
     }
-    return length;
   }
-  struct fd_table *fd_table = &thread_current()->process->fd_table;
-  struct file* file = get_file (fd_table, fd);
-  if (file == NULL) {
-    return -1;
-  }
+  return length;
+}
+
+/* Helper function for read syscall
+   reads length bytes from the file */
+static int
+read_from_file (struct file *file, void *buffer, unsigned length) {
   off_t total_bytes_read = 0;
   /* Break up user buffer into smaller chunks of KERNEL_BUF_SIZE */
   while (length > 0) {
@@ -308,6 +304,25 @@ read (int fd, void *buffer, unsigned length) {
     total_bytes_read += bytes_read;
   }
   return total_bytes_read;
+}
+
+/* Reads size bytes from the file open as fd into buffer. Returns
+   number of bytes actually read. Returns -1 if there is an error
+   in getting open file.*/
+static int
+read (int fd, void *buffer, unsigned length) {
+  if (fd == STDOUT_FILENO) {
+    return -1;
+  }
+  if (fd == STDIN_FILENO) {
+    return read_from_stdin (buffer, length);
+  }
+  struct fd_table *fd_table = &thread_current()->process->fd_table;
+  struct file* file = get_file (fd_table, fd);
+  if (file == NULL) {
+    return -1;
+  }
+  return read_from_file(file, buffer, length);
 }
 
 static void
