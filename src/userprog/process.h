@@ -21,12 +21,13 @@ struct process
     bool recover_flag;      /* Indicates whether the page fault
                                needs to be recovered from, without
                                causing kernel panic */
-    struct fd_table fd_table;   /* List of file descriptors to file structs. */
+    struct fd_table fd_table;   /* Associates file descriptors
+                                   to file structs opened by the user. */
     
     /* Each process is allocated a child_process_entry
        This allows communication with
        a waiting parent on exit */
-    struct child_to_parent *entry; 
+    struct child_to_parent_entry *entry; 
     /* Lists all children entries of this process 
        This allows communication with all children. */
     struct list child_entries; 
@@ -44,7 +45,7 @@ struct process
    This struct is always stored on the heap
    and gets destroyed only when both child and parent
    are finished with it */
-struct child_to_parent
+struct child_to_parent_entry
   {
     /* pid of the child process */
     pid_t pid;
