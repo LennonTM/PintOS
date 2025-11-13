@@ -25,6 +25,10 @@ static bool process_init (struct thread *t);
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
+static void handle_entry_destruction(
+  struct child_to_parent *entry,
+  bool is_parent);
+
 struct start_process_args {
   char *cmd_line_cpy;
   struct child_to_parent *child_entry;
@@ -116,8 +120,8 @@ process_execute (const char *cmd_line)
   /* If process loading failed (which includes TID_ERROR)
      free the auxiliary data */
   if (!entry->loading_succeeded) {
-    list_remove(&entry->child_elem);
-    free(entry);
+    bool is_parent = true;
+    handle_entry_destruction(entry, is_parent);
     palloc_free_page (ptr_and_cmd_cpy);
     return TID_ERROR;
   }
