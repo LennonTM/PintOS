@@ -21,6 +21,7 @@ typedef void (*handle_syscall)(void *esp, uint32_t *eax);
 
 #define KERNEL_BUF_SIZE 256
 #define min(x, y) ((x) < (y) ? (x) : (y))
+#define CONTROLLED_PAGE_FAULT -1
 
 /* Reads a byte at user virtual address UADDR.
    UADDR must be below PHYS_BASE.
@@ -48,7 +49,7 @@ put_user (uint8_t *udst, uint8_t byte)
   asm ("movl $1f, %0; movb %b2, %1; 1:"
        : "=&a" (error_code), "=m" (*udst) : "q" (byte));
   thread_current()->process->recover_flag = false;
-  return error_code != -1;
+  return error_code != CONTROLLED_PAGE_FAULT;
 }
 
 /* Copies data of specified length from kernel spcae buffer to
@@ -85,7 +86,7 @@ copy_from_user_buf (const void *user_buf_, void *kernel_buf_, size_t length) {
   const uint8_t *user_buf = (const uint8_t *) user_buf_;
   for (size_t i = 0; i < length; i++) {
     int byte = get_user(user_buf);
-    if (byte == -1) {
+    if (byte == CONTROLLED_PAGE_FAULT) {
       return false;
     }
     *kernel_buf = (uint8_t) byte;
@@ -123,7 +124,7 @@ check_valid_string (const char *string) {
   const char *p = string;
   while (is_user_vaddr(p)) {
     int byte = get_user((const uint8_t *) p);
-    if (byte == -1) {
+    if (byte == CONTROLLED_PAGE_FAULT) {
       return false;
     }
     if ((char) byte == '\0') {
@@ -217,6 +218,8 @@ handle_remove (void *esp, uint32_t *eax) {
   *eax = remove(file);
 }
 
+#define INVALID_FILE_ERROR -1
+
 /* Opens the file called file. Returns non-negative integer handle called
    file descriptor (fd) or -1 if file could not be opened. A fd of 1 or
    0 is reserved for the console. */
@@ -224,7 +227,7 @@ static int
 open (const char *file_name) {
   struct file* file = filesys_open(file_name);
   if (file == NULL)
-    return -1;
+    return INVALID_FILE_ERROR;
   return add_file (&thread_current()->process->fd_table, file);
 }
 
@@ -291,7 +294,7 @@ read_from_file (struct file *file, void *buffer, unsigned length) {
 static int
 read (int fd, void *buffer, unsigned length) {
   if (fd == STDOUT_FILENO) {
-    return -1;
+    return INVALID_FILE_ERROR;
   }
   if (fd == STDIN_FILENO) {
     return read_from_stdin (buffer, length);
@@ -299,7 +302,7 @@ read (int fd, void *buffer, unsigned length) {
   struct fd_table *fd_table = &thread_current()->process->fd_table;
   struct file* file = get_file (fd_table, fd);
   if (file == NULL) {
-    return -1;
+    return INVALID_FILE_ERROR;
   }
   return read_from_file(file, buffer, length);
 }
@@ -357,14 +360,14 @@ write_to_file (struct file *file, const void *buffer, unsigned length) {
 static int 
 write (int fd, const void *buffer, unsigned length) {
   if (fd == STDIN_FILENO) {
-    return -1;
+    return INVALID_FILE_ERROR;
   }
   if (fd == STDOUT_FILENO) {
     return write_to_stdout (buffer, length);
   }
   struct file* file = get_file (&thread_current()->process->fd_table, fd);
   if (file == NULL) {
-    return -1;
+    return INVALID_FILE_ERROR;
   }
   return write_to_file (file, buffer, length);
 }
