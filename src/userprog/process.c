@@ -330,8 +330,8 @@ handle_entry_destruction(
     entry->parent_finished = true;
   } else {
     /* When child finishes, up the semaphore to wake up a waiting parent */
-    sema_up(&entry->sema);
     entry->child_finished = true;
+    sema_up(&entry->sema);
   }
   /* Check whether we should destroy the entry */
   bool destroy_self = entry->parent_finished && entry->child_finished;
