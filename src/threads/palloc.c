@@ -63,6 +63,7 @@ palloc_init (size_t user_page_limit)
              user_pages, "user pool");
 }
 
+/* Exposes the number of user_pages for creating a frame table */
 size_t
 get_user_pages() 
 {
