@@ -19,4 +19,5 @@ struct frame_table_entry {
 
 void frame_table_init (void);
 void *frame_alloc (enum palloc_flags flags);
-void frame_install_page(void *kpage, void *upage);
+void frame_install_page(void *upage, void *kpage);
+void frame_free (void *kpage);

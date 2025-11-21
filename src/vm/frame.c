@@ -20,7 +20,7 @@ frame_table_init (void) {
 }
 
 /* Allocates a page using palloc_get_page
-   the corresponding frame_table_entry will be available also */
+   the corresponding frame_table_entry will be used after */
 void *
 frame_alloc (enum palloc_flags flags) {
     void *kpage = palloc_get_page (flags); 
@@ -29,7 +29,7 @@ frame_alloc (enum palloc_flags flags) {
         PANIC("Out of frames!!!");
     }
     
-    size_t frame_index = vtop(kpage) / PGSIZE;
+    size_t frame_index = get_page_index(kpage);
     ASSERT(frame_index < get_user_pages());
     frame_table[frame_index] = (struct frame_table_entry) {
         .owner = NULL,
@@ -41,9 +41,16 @@ frame_alloc (enum palloc_flags flags) {
     return kpage;   
 }
 
+/* Frees a page using palloc_free_page
+   the corresponding frame_table_entry will be unused after */
+void
+frame_free (void *kpage) {
+    palloc_free_page(kpage);
+}
+
 /* Sets owner and upage members of an allocated kpage */
 void
-frame_install_page(void *kpage, void *upage) {
+frame_install_page(void *upage, void *kpage) {
     /* Assert that this frame has just been allocated */
     size_t frame_index = get_page_index(kpage);
     frame_table[frame_index].owner = thread_current()->process;
