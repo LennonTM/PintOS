@@ -64,7 +64,8 @@ userprog_SRC += userprog/fd_table.c		# File Descriptor table.
 
 # Virtual memory code.
 vm_SRC = devices/swap.c		# Swap block manager.
-vm_SRC += vm/frame.c			# Some other file.
+vm_SRC += vm/frame.c			# Frame table.
+vm_SRC += vm/page.c			# Supplementary page table.
 
 # Filesystem code.
 filesys_SRC  = filesys/filesys.c	# Filesystem core.
