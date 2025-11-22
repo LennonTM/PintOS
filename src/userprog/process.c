@@ -5,6 +5,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "list.h"
+#include "hash.h"
 #include "userprog/gdt.h"
 #include "userprog/pagedir.h"
 #include "userprog/tss.h"
@@ -21,6 +23,7 @@
 #include "threads/vaddr.h"
 #include "devices/timer.h"
 #include "vm/frame.h"
+#include "vm/page.h"
 
 static bool process_init (struct thread *t);
 static thread_func start_process NO_RETURN;
@@ -148,6 +151,7 @@ process_init (struct thread *t)
 
   /* Initialise process attributes. */
   process->pagedir = NULL;
+  hash_init(&process->spt, spt_hash, spt_less, NULL);
   process->thread = t;
   process->recover_flag = false;
   process->executable_file = NULL;

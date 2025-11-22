@@ -5,6 +5,7 @@
 #include "list.h"
 #include "threads/synch.h"
 #include "userprog/fd_table.h"
+#include "hash.h"
 
 #define PROC_SUCC (0)  /* Exit code for normal process termination. */
 #define PROC_ERR (-1)  /* Exit code for erroneous process termination. */
@@ -17,6 +18,7 @@ typedef int pid_t;
 struct process
   {
     uint32_t *pagedir;      /* Process page directory. */
+    struct hash spt;        /* Supplementary page table */
     struct thread *thread;  /* Process underlying kernel thread. */
     bool recover_flag;      /* Indicates whether the page fault
                                needs to be recovered from, without
