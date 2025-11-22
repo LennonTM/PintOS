@@ -81,4 +81,8 @@ int process_wait (tid_t);
 void process_exit (int) NO_RETURN;
 void process_activate (void);
 
+bool load_page_from_file (struct file *file, off_t ofs, uint8_t *upage,
+                          uint32_t page_read_bytes, uint32_t page_zero_bytes,
+                          bool writable);
+
 #endif /* userprog/process.h */

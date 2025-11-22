@@ -723,9 +723,54 @@ validate_segment (const struct Elf32_Phdr *phdr, struct file *file)
   return true;
 }
 
-/* Loads a segment starting at offset OFS in FILE at address
+/* Loads a page starting at offset OFS in FILE at address
+   UPAGE.  In total, page_read_bytes + page_zero_bytes 
+   bytes of virtual memory are initialized, as follows:
+
+        - page_read_bytes bytes at UPAGE must be read from FILE
+          starting at offset OFS.
+
+        - page_zero_bytes bytes at UPAGE + page_read_bytes must be zeroed.
+
+   A page initialized by this function must be writable by the
+   user process if WRITABLE is true, read-only otherwise.
+
+   Return true if successful, false if a memory allocation error
+   or disk read error occurs. */
+bool
+load_page_from_file (struct file *file, off_t ofs, uint8_t *upage,
+                     uint32_t page_read_bytes, uint32_t page_zero_bytes,
+                     bool writable)
+{
+  /* Get a new page of memory. */
+  uint8_t *kpage = frame_alloc (PAL_USER);
+  if (kpage == NULL){
+    return false;
+  }
+
+  /* Add the page to the process's address space. */
+  if (!install_page (upage, kpage, writable)) 
+  {
+    frame_free (kpage);
+    return false; 
+  }
+
+  frame_install_page (upage, kpage);
+
+  /* Load data into the page. */
+  file_seek (file, ofs);
+  if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes){
+    return false; 
+  }
+  memset (kpage + page_read_bytes, 0, page_zero_bytes);
+  return true;
+}
+
+/* Populates Supplementary page table of the process with
+   data required to load pages of the file when needed
+   Go through a segment, starting at offset OFS in FILE at address
    UPAGE.  In total, READ_BYTES + ZERO_BYTES bytes of virtual
-   memory are initialized, as follows:
+   memory are to be initilised when needed, as follows:
 
         - READ_BYTES bytes at UPAGE must be read from FILE
           starting at offset OFS.
@@ -752,28 +797,12 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
          and zero the final PAGE_ZERO_BYTES bytes. */
       size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
-        
-      /* Get a new page of memory. */
-      uint8_t *kpage = frame_alloc (PAL_USER);
-      if (kpage == NULL){
-        return false;
-      }
-        
-      /* Add the page to the process's address space. */
-      if (!install_page (upage, kpage, writable)) 
-      {
-        frame_free (kpage);
-        return false; 
-      }     
 
-      frame_install_page (upage, kpage);
-
-      /* Load data into the page. */
-      file_seek (file, ofs);
-      if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes){
-        return false; 
-      }
-      memset (kpage + page_read_bytes, 0, page_zero_bytes);
+      /* TODO: Defer load_page_from_file call to the 
+       * moment when the page is accessed, by recording
+       * the arguments to the SPT */
+      load_page_from_file (file, ofs, upage, page_read_bytes,
+                      page_zero_bytes, writable);
 
       /* Advance. */
       read_bytes -= page_read_bytes;
