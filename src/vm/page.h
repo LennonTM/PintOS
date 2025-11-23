@@ -40,7 +40,7 @@ union spt_entry_aux {
 
 /* Entry to the Supplementary Page Table. */
 struct spt_entry {
-  uint32_t* u_addr; /* User address of spt entry*/
+  void *upage; /* User virtual address of the page */
 
   enum page_status status; /* Indicates how the page should be handled */
 
