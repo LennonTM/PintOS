@@ -161,16 +161,23 @@ page_fault (struct intr_frame *f)
   if (spt_entry_elem != NULL) {
     struct spt_entry *spt_entry =
       hash_entry (spt_entry_elem, struct spt_entry, elem);
-    if (spt_entry->status == FILE) {
-      /* Page is to be lazy-loaded from a file */
-      load_page_from_file (
-        spt_entry->aux.file.file,
-        spt_entry->aux.file.ofs,
-        spt_entry->upage,
-        spt_entry->aux.file.page_read_bytes,
-        spt_entry->aux.file.page_zero_bytes,
-        spt_entry->writable);
-      return;
+    switch (spt_entry->status) {
+      case FRAME:
+        PANIC("IF IT'S IN THE FRAME WHY ARE WE PAGE FAULTING???");
+      case SWAP:
+        PANIC("UNIMPLEMENTED: SWAP IN PAGE FAULT");
+      case FILE:
+        /* Page is to be lazy-loaded from a file */
+        load_page_from_file (
+          spt_entry->aux.file.file,
+          spt_entry->aux.file.ofs,
+          spt_entry->upage,
+          spt_entry->aux.file.page_read_bytes,
+          spt_entry->aux.file.page_zero_bytes,
+          spt_entry->writable);
+        return;
+      case ZERO:
+        PANIC("UNIMPLEMENTED: SWAP IN PAGE FAULT");
     }
   }
 
