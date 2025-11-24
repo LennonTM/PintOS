@@ -184,10 +184,14 @@ page_fault (struct intr_frame *f)
   }
 
   /* Check for stack growth */
-  void *esp = user ? f->esp : thread_current()->esp;
+  void *esp = user ? f->esp : proc->esp;
   if (is_user_vaddr (fault_addr) 
       && fault_addr >= esp - STACK_GROWTH_THRESHOLD) 
   {
+    /* Kernel can attempt user stack access only when
+       accessing user memory in a system call, so
+       recover_flag must have been set */
+    ASSERT (user || proc->recover_flag);
     /* Verify that the stack is less than STACK_GROWTH_MAX_SIZE */
     if (fault_addr < PHYS_BASE - STACK_GROWTH_MAX_SIZE)
       process_exit (PROC_ERR);

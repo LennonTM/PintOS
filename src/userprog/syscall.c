@@ -451,6 +451,7 @@ static void
 syscall_handler (struct intr_frame *f) 
 {
   void *esp_cpy = f->esp;
+  thread_current()->process->esp = f->esp;
   uint32_t syscall_num = (uint32_t) parse_argument(&esp_cpy);
   if (syscall_num >= TOTAL_SYSCALLS) {
     process_exit(PROC_ERR);

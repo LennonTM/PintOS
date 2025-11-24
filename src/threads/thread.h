@@ -103,7 +103,6 @@ struct thread
     int32_t nice;                       /* Threads willingness to yield*/
     struct list_elem updelem;           /* List element for threads_to_update.*/
     bool should_update;                 /* Indicates priority should update. */
-    void *esp;                          /* Stack pointer for interrupts */
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */

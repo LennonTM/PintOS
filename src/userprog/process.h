@@ -23,6 +23,7 @@ struct process
     bool recover_flag;      /* Indicates whether the page fault
                                needs to be recovered from, without
                                causing kernel panic */
+    void *esp;              /* Saved stack pointer for interrupts */
     struct fd_table fd_table;   /* Associates file descriptors
                                    to file structs opened by the user. */
     
