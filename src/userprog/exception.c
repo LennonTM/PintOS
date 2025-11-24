@@ -15,6 +15,8 @@ static void kill (struct intr_frame *);
 static void page_fault (struct intr_frame *);
 
 #define CONTROLLED_PAGE_FAULT 0xffffffff
+#define STACK_GROWTH_THRESHOLD 32
+#define STACK_GROWTH_MAX_SIZE 0x800000
 
 /* Registers handlers for interrupts that can be caused by user
    programs.
@@ -192,6 +194,19 @@ page_fault (struct intr_frame *f)
     /* Communicate the page fault back */
     f->eax = CONTROLLED_PAGE_FAULT;
     return;
+  } else {
+    ASSERT (user);
+
+    /* Check for stack growth, user mode */
+    if (is_user_vaddr (fault_addr) 
+     && fault_addr >= f->esp - STACK_GROWTH_THRESHOLD
+     ) {
+      if (fault_addr < PHYS_BASE - STACK_GROWTH_MAX_SIZE)
+        process_exit (PROC_ERR);
+      load_page_zeroing(fault_page, true);
+      return;
+    }
+    
   }
 
   /* To implement virtual memory, delete the rest of the function

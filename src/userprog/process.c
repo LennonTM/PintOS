@@ -766,6 +766,27 @@ load_page_from_file (struct file *file, off_t ofs, uint8_t *upage,
   return true;
 }
 
+/* Loads a page at upage and fills it with zeros. Installs it into the page 
+   table and frame table. */
+bool
+load_page_zeroing (uint8_t *upage, bool writable)
+{
+  uint8_t *kpage = frame_alloc(PAL_USER);
+  if (kpage == NULL)
+    return false;
+
+  memset(kpage, 0, PGSIZE);
+
+  if (!install_page(upage, kpage, writable)) {
+    frame_free(kpage);
+    return false;
+  }
+
+  frame_install_page (upage, kpage);
+
+  return true;
+}
+
 /* Populates Supplementary page table of the process with
    data required to load pages of the file when needed
    Go through a segment, starting at offset OFS in FILE at address
