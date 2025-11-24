@@ -4,7 +4,9 @@
 #include "userprog/gdt.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include "threads/vaddr.h"
 #include "userprog/process.h"
+#include "vm/page.h"
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
@@ -148,8 +150,32 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
-#ifdef USERPROG
   struct process *proc = thread_current()->process; 
+  void *fault_page = pg_round_down(fault_addr);
+
+  /* Get SPT entry for fault_addr */
+  struct spt_entry key_entry = (struct spt_entry) {
+    .upage = fault_page
+  };
+  struct hash_elem *spt_entry_elem = hash_find (&proc->spt, &key_entry.elem);
+  if (spt_entry_elem != NULL) {
+    struct spt_entry *spt_entry =
+      hash_entry (spt_entry_elem, struct spt_entry, elem);
+    if (spt_entry->status == FILE) {
+      /* Page is to be lazy-loaded from a file */
+      load_page_from_file (
+        spt_entry->aux.file.file,
+        spt_entry->aux.file.ofs,
+        spt_entry->upage,
+        spt_entry->aux.file.page_read_bytes,
+        spt_entry->aux.file.page_zero_bytes,
+        spt_entry->writable);
+      return;
+    }
+  }
+
+  /* Recover if the page fault is a result of
+     user memory access in a syscall */
   if (proc != NULL && proc->recover_flag) {
     ASSERT (!user);
     /* Controlled access by the kernel in a syscall */
@@ -160,7 +186,6 @@ page_fault (struct intr_frame *f)
     f->eax = CONTROLLED_PAGE_FAULT;
     return;
   }
-#endif
 
   /* To implement virtual memory, delete the rest of the function
     body, and replace it with code that brings in the page to

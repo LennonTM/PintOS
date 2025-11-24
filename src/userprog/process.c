@@ -798,11 +798,10 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-      /* TODO: Defer load_page_from_file call to the 
-       * moment when the page is accessed, by recording
-       * the arguments to the SPT */
-      load_page_from_file (file, ofs, upage, page_read_bytes,
-                      page_zero_bytes, writable);
+      /* Record data about a lazy-loaded page in SPT */
+      record_file_page (file, ofs, upage,
+                       page_read_bytes, page_zero_bytes,
+                       writable);
 
       /* Advance. */
       read_bytes -= page_read_bytes;

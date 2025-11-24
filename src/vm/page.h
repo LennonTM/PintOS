@@ -3,8 +3,9 @@
 
 #include <inttypes.h>
 #include <stdlib.h>
-#include <lib/kernel/hash.h>
-#include <lib/debug.h>
+#include "lib/kernel/hash.h"
+#include "lib/debug.h"
+#include "filesys/file.h"
 
 /* Every page is either in a frame, in the swap partition or in the file system. 
    It could also be an all-zero page. */
@@ -16,10 +17,10 @@ enum page_status {
 };
 
 struct file_aux {
-  struct file* ptr;     /* Pointer to the struct file. */
-  size_t offset;        /* The number of bytes offset within the file. */
-  size_t valid_bytes;   /* Number of bytes valid in the page for files*/
-  size_t invalid_bytes; /* Number of invalid bytes in the page for files*/
+  struct file* file;        /* Pointer to the struct file. */
+  size_t ofs;               /* The number of bytes offset within the file. */
+  size_t page_read_bytes;   /* Number of bytes to read from the file. */
+  size_t page_zero_bytes;   /* Number of bytes to fill with zeros. */
 };
 
 struct swap_aux {
@@ -42,6 +43,10 @@ union spt_entry_aux {
 struct spt_entry {
   void *upage; /* User virtual address of the page */
 
+  /* Redundant, since this information can be stored in PTE
+     TODO Remove in the future and record in PTE */
+  bool writable; /* Is user page writable */
+
   enum page_status status; /* Indicates how the page should be handled */
 
   union spt_entry_aux aux; /* Meta data for the spt entry */
@@ -57,5 +62,9 @@ spt_hash (const struct hash_elem *p_, void *aux UNUSED);
 bool
 spt_less (const struct hash_elem *a_, const struct hash_elem *b_,
 void *aux UNUSED);
+
+void record_file_page (struct file *file, off_t ofs, uint8_t *upage,
+                       uint32_t page_read_bytes, uint32_t page_zero_bytes,
+                       bool writable);
 
 #endif 
