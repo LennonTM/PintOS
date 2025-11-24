@@ -771,11 +771,9 @@ load_page_from_file (struct file *file, off_t ofs, uint8_t *upage,
 bool
 load_page_zeroing (uint8_t *upage, bool writable)
 {
-  uint8_t *kpage = frame_alloc(PAL_USER);
+  uint8_t *kpage = frame_alloc(PAL_USER | PAL_ZERO);
   if (kpage == NULL)
     return false;
-
-  memset(kpage, 0, PGSIZE);
 
   if (!install_page(upage, kpage, writable)) {
     frame_free(kpage);

@@ -183,6 +183,17 @@ page_fault (struct intr_frame *f)
     }
   }
 
+  /* Check for stack growth */
+  void *esp = user ? f->esp : thread_current()->esp;
+  if (is_user_vaddr (fault_addr) 
+      && fault_addr >= esp - STACK_GROWTH_THRESHOLD) 
+  {
+    if (fault_addr < PHYS_BASE - STACK_GROWTH_MAX_SIZE)
+      process_exit (PROC_ERR);
+    load_page_zeroing(fault_page, true);
+    return;
+  }
+
   /* Recover if the page fault is a result of
      user memory access in a syscall */
   if (proc != NULL && proc->recover_flag) {
@@ -194,19 +205,6 @@ page_fault (struct intr_frame *f)
     /* Communicate the page fault back */
     f->eax = CONTROLLED_PAGE_FAULT;
     return;
-  } else {
-    ASSERT (user);
-
-    /* Check for stack growth, user mode */
-    if (is_user_vaddr (fault_addr) 
-     && fault_addr >= f->esp - STACK_GROWTH_THRESHOLD
-     ) {
-      if (fault_addr < PHYS_BASE - STACK_GROWTH_MAX_SIZE)
-        process_exit (PROC_ERR);
-      load_page_zeroing(fault_page, true);
-      return;
-    }
-    
   }
 
   /* To implement virtual memory, delete the rest of the function
