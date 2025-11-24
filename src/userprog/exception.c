@@ -188,9 +188,13 @@ page_fault (struct intr_frame *f)
   if (is_user_vaddr (fault_addr) 
       && fault_addr >= esp - STACK_GROWTH_THRESHOLD) 
   {
+    /* Verify that the stack is less than STACK_GROWTH_MAX_SIZE */
     if (fault_addr < PHYS_BASE - STACK_GROWTH_MAX_SIZE)
       process_exit (PROC_ERR);
-    load_page_zeroing(fault_page, true);
+    /* Load the page */
+    if (!load_page_zeroing(fault_page, true)) {
+      process_exit (PROC_ERR);
+    }
     return;
   }
 
