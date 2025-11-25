@@ -35,7 +35,8 @@ struct process
        This allows communication with all children. */
     struct list child_entries; 
 
-    
+    /* Data structure that stores memory mappings of this process. */
+    struct mmap_table mmap_table; 
 
     struct file *executable_file;
   };
