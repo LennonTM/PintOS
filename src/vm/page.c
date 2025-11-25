@@ -45,3 +45,11 @@ record_file_page (struct file *file, off_t ofs, uint8_t *upage,
   ASSERT (prev_elem == NULL);
 }
 
+/* Removes provided entry from the SPT
+   returns true if entry was removed successfully */
+bool remove_entry (struct spt_entry *entry) {
+  struct hash *spt = &thread_current()->process->spt;
+  struct hash_elem *removed_elem = hash_delete (spt, &entry->elem);
+  free (entry);
+  return removed_elem != NULL;
+}

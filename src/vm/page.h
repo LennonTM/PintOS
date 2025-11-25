@@ -66,5 +66,6 @@ void *aux UNUSED);
 void record_file_page (struct file *file, off_t ofs, uint8_t *upage,
                        uint32_t page_read_bytes, uint32_t page_zero_bytes,
                        bool writable);
+bool remove_entry (struct spt_entry *entry);
 
 #endif 

@@ -177,10 +177,12 @@ page_fault (struct intr_frame *f)
           spt_entry->aux.file.page_read_bytes,
           spt_entry->aux.file.page_zero_bytes,
           spt_entry->writable);
-        return;
+        break;
       case ZERO:
         PANIC("UNIMPLEMENTED: SWAP IN PAGE FAULT");
     }
+    remove_entry (spt_entry);
+    return;
   }
 
   /* Check for stack growth */
