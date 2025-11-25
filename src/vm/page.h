@@ -68,5 +68,6 @@ void record_file_page (struct hash *spt, struct file *file, off_t ofs,
                        uint32_t page_zero_bytes, bool writable);
 bool remove_entry (struct hash *spt, struct spt_entry *entry);
 struct spt_entry *get_entry (struct hash *spt, void *upage);
+void destroy_spt (struct hash *spt);
 
 #endif 

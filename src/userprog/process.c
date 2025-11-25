@@ -439,7 +439,8 @@ process_exit (int exit_code)
       clean_child_to_parent_entries (exit_code);
 
       free_fd_table (&cur->fd_table);
-
+      
+      destroy_spt (&cur->spt);
       /* Destroy the current process's page directory and switch back
          to the kernel-only page directory. */
       pd = cur->pagedir;

@@ -47,7 +47,8 @@ record_file_page (struct hash *spt, struct file *file, off_t ofs,
 
 /* Removes provided entry from the SPT
    returns true if entry was removed successfully */
-bool remove_entry (struct hash *spt, struct spt_entry *entry) {
+bool 
+remove_entry (struct hash *spt, struct spt_entry *entry) {
   struct hash_elem *removed_elem = hash_delete (spt, &entry->elem);
   free (entry);
   return removed_elem != NULL;
@@ -56,7 +57,8 @@ bool remove_entry (struct hash *spt, struct spt_entry *entry) {
 /* Returns an address of an SPT entry
    corresponding to provided user vaddr of the page 
    NULL if not entry exists */
-struct spt_entry *get_entry (struct hash *spt, void *upage) {
+struct spt_entry *
+get_entry (struct hash *spt, void *upage) {
   struct spt_entry key_entry = (struct spt_entry) {
     .upage = upage
   };
@@ -69,3 +71,16 @@ struct spt_entry *get_entry (struct hash *spt, void *upage) {
   return spt_entry;
 }
 
+/* Helper function for destory_spt, destroys memory for the entry */
+static void
+destroy_spt_entry (struct hash_elem *e, void *aux UNUSED)
+{
+  struct spt_entry *spt_entry = hash_entry (e, struct spt_entry, elem);
+  
+  free (spt_entry); 
+}
+
+void
+destroy_spt (struct hash *spt) {
+  hash_destroy (spt, destroy_spt_entry);
+}
