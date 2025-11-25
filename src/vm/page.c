@@ -19,9 +19,25 @@ void *aux UNUSED)
 {
   const struct spt_entry *a = hash_entry (a_, struct spt_entry, elem);
   const struct spt_entry *b = hash_entry (b_, struct spt_entry, elem);
-  return a->upage < b->upage;
+  return a->upage < b->upage;                           
 }
 
+/* Returns the spt_entry containing the given virtual address,
+or a null pointer if no such entry exists. */
+struct spt_entry *
+spt_lookup (const void *address, struct hash* spt)
+{
+  struct spt_entry p;
+  struct hash_elem *e;
+  p.upage = address;
+  e = hash_find (spt, &p.elem);
+  return e != NULL ? hash_entry (e, struct spt_entry, elem) : NULL;
+}
+
+/* Records the file at page starting at upage in spt. ofs is the offset within
+   the file. page_read_bytes is the number of bytes that can be read of the
+   file in the page, page_zero_bytes is the rest of the bytes in the page 
+   which are zero.*/
 void
 record_file_page (struct file *file, off_t ofs, uint8_t *upage,
                   uint32_t page_read_bytes, uint32_t page_zero_bytes,
@@ -44,4 +60,14 @@ record_file_page (struct file *file, off_t ofs, uint8_t *upage,
   struct hash_elem* prev_elem = hash_insert (spt, &entry->elem);
   ASSERT (prev_elem == NULL);
 }
+
+/* Removes the page at address upage in the spt table. */
+void
+remove_page (void* upage) {
+  struct hash *spt = &thread_current()->process->spt;
+  struct spt_entry *entry = spt_lookup (upage, spt);
+  hash_delete (spt, &entry->elem);
+}
+
+
 
