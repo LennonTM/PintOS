@@ -23,6 +23,10 @@ typedef void (*handle_syscall)(void *esp, uint32_t *eax);
 #define min(x, y) ((x) < (y) ? (x) : (y))
 #define CONTROLLED_PAGE_FAULT -1
 
+/* Map region identifier. */
+typedef int mapid_t;
+#define MAP_FAILED ((mapid_t) -1)
+
 /* Reads a byte at user virtual address UADDR.
    UADDR must be below PHYS_BASE.
    Returns the byte value if successful, -1 if a segfault
@@ -423,7 +427,34 @@ handle_close (void *esp, uint32_t *eax UNUSED) {
   close(fd);
 }
 
-#define TOTAL_SYSCALLS 13
+/* Maps the file open as fd into the process’s virtual address space. 
+   The entire file is mapped into consecutive virtual pages starting at addr.
+*/
+static mapid_t mmap (int fd, void *addr) {
+  
+}
+
+static void 
+handle_mmap (void* esp, uint32_t *eax UNUSED) {
+  int fd = (int) parse_argument(&esp);
+  void *addr = (void*) parse_argument(&esp);
+  *eax = mmap(fd, addr);
+}
+
+/* Unmaps the mapping designated by mapping, which must be a mapping ID 
+   returned by a previous call to mmap by the same process that has not 
+   yet been unmapped.*/
+static void munmap (mapid_t mapping) {
+
+}
+
+static void 
+handle_munmap (void* esp, uint32_t *eax UNUSED) {
+  mapid_t mapping = (mapid_t) parse_argument (&esp);
+  munmap(mapping);
+}
+
+#define TOTAL_SYSCALLS 15
 
 static handle_syscall handlers[TOTAL_SYSCALLS] = {
   [SYS_HALT]=&handle_halt,
@@ -439,6 +470,8 @@ static handle_syscall handlers[TOTAL_SYSCALLS] = {
   [SYS_SEEK]=&handle_seek,
   [SYS_TELL]=&handle_tell,
   [SYS_CLOSE]=&handle_close,
+  [SYS_MMAP]=&handle_mmap,
+  [SYS_MUNMAP]=&handle_munmap,
 };
 
 void
