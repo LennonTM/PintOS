@@ -818,7 +818,8 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
       /* Record data about a lazy-loaded page in SPT */
-      record_file_page (file, ofs, upage,
+      struct hash *spt = &thread_current()->process->spt;
+      record_file_page (spt, file, ofs, upage,
                        page_read_bytes, page_zero_bytes,
                        writable);
 

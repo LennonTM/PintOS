@@ -22,10 +22,11 @@ void *aux UNUSED)
   return a->upage < b->upage;
 }
 
+/* Records data in SPT about a page to be lazy-loaded from a file */
 void
-record_file_page (struct file *file, off_t ofs, uint8_t *upage,
-                  uint32_t page_read_bytes, uint32_t page_zero_bytes,
-                  bool writable)
+record_file_page (struct hash *spt, struct file *file, off_t ofs,
+                  uint8_t *upage, uint32_t page_read_bytes,
+                  uint32_t page_zero_bytes, bool writable)
 {
   struct spt_entry *entry = 
     (struct spt_entry *) malloc (sizeof (struct spt_entry));
@@ -40,16 +41,31 @@ record_file_page (struct file *file, off_t ofs, uint8_t *upage,
   entry->aux.file.ofs = ofs;
   entry->aux.file.page_read_bytes = page_read_bytes;
   entry->aux.file.page_zero_bytes = page_zero_bytes;
-  struct hash *spt = &thread_current()->process->spt;
   struct hash_elem* prev_elem = hash_insert (spt, &entry->elem);
   ASSERT (prev_elem == NULL);
 }
 
 /* Removes provided entry from the SPT
    returns true if entry was removed successfully */
-bool remove_entry (struct spt_entry *entry) {
-  struct hash *spt = &thread_current()->process->spt;
+bool remove_entry (struct hash *spt, struct spt_entry *entry) {
   struct hash_elem *removed_elem = hash_delete (spt, &entry->elem);
   free (entry);
   return removed_elem != NULL;
 }
+
+/* Returns an address of an SPT entry
+   corresponding to provided user vaddr of the page 
+   NULL if not entry exists */
+struct spt_entry *get_entry (struct hash *spt, void *upage) {
+  struct spt_entry key_entry = (struct spt_entry) {
+    .upage = upage
+  };
+  struct hash_elem *spt_entry_elem = hash_find (spt, &key_entry.elem);
+  if (spt_entry_elem == NULL) {
+    return NULL;
+  }
+  struct spt_entry *spt_entry =
+    hash_entry (spt_entry_elem, struct spt_entry, elem);
+  return spt_entry;
+}
+

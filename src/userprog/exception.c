@@ -155,14 +155,8 @@ page_fault (struct intr_frame *f)
   struct process *proc = thread_current()->process; 
   void *fault_page = pg_round_down(fault_addr);
 
-  /* Get SPT entry for fault_addr */
-  struct spt_entry key_entry = (struct spt_entry) {
-    .upage = fault_page
-  };
-  struct hash_elem *spt_entry_elem = hash_find (&proc->spt, &key_entry.elem);
-  if (spt_entry_elem != NULL) {
-    struct spt_entry *spt_entry =
-      hash_entry (spt_entry_elem, struct spt_entry, elem);
+  struct spt_entry *spt_entry = get_entry (&proc->spt, fault_page);
+  if (spt_entry != NULL) {
     switch (spt_entry->status) {
       case FRAME:
         PANIC("IF IT'S IN THE FRAME WHY ARE WE PAGE FAULTING???");
@@ -181,7 +175,7 @@ page_fault (struct intr_frame *f)
       case ZERO:
         PANIC("UNIMPLEMENTED: SWAP IN PAGE FAULT");
     }
-    remove_entry (spt_entry);
+    remove_entry (&proc->spt, spt_entry);
     return;
   }
 

@@ -63,9 +63,10 @@ bool
 spt_less (const struct hash_elem *a_, const struct hash_elem *b_,
 void *aux UNUSED);
 
-void record_file_page (struct file *file, off_t ofs, uint8_t *upage,
-                       uint32_t page_read_bytes, uint32_t page_zero_bytes,
-                       bool writable);
-bool remove_entry (struct spt_entry *entry);
+void record_file_page (struct hash *spt, struct file *file, off_t ofs,
+                       uint8_t *upage, uint32_t page_read_bytes,
+                       uint32_t page_zero_bytes, bool writable);
+bool remove_entry (struct hash *spt, struct spt_entry *entry);
+struct spt_entry *get_entry (struct hash *spt, void *upage);
 
 #endif 
