@@ -11,6 +11,8 @@
 #include "threads/malloc.h"
 #include "devices/input.h"
 #include "lib/stdio.h"
+#include "vm/page.h"
+#include "vm/mmap.h"
 
 static void syscall_handler (struct intr_frame *);
 
@@ -22,10 +24,6 @@ typedef void (*handle_syscall)(void *esp, uint32_t *eax);
 #define KERNEL_BUF_SIZE 256
 #define min(x, y) ((x) < (y) ? (x) : (y))
 #define CONTROLLED_PAGE_FAULT -1
-
-/* Map region identifier. */
-typedef int mapid_t;
-#define MAP_FAILED ((mapid_t) -1)
 
 /* Reads a byte at user virtual address UADDR.
    UADDR must be below PHYS_BASE.
@@ -431,7 +429,32 @@ handle_close (void *esp, uint32_t *eax UNUSED) {
    The entire file is mapped into consecutive virtual pages starting at addr.
 */
 static mapid_t mmap (int fd, void *addr) {
-  
+  if (fd == 0 || fd == 1) {
+    return MAP_FAILED;
+  }
+  int length = filesize(fd);
+  if (length == 0 || 
+      (uintptr_t)addr % WORD_BYTES != 0 || 
+      (uintptr_t)addr == 0) 
+  {
+    return MAP_FAILED;
+  }
+
+  int ofs = 0;
+  while (length > 0) {
+    int read_bytes = min(length, PGSIZE);
+    int zero_bytes = PGSIZE - read_bytes;
+    struct fd_table *fd_table = &thread_current()->process->fd_table;
+    struct file* file = get_file (fd_table, fd);
+    if (file == NULL) {
+      return MAP_FAILED;
+    }
+    
+    record_file_page(file, ofs, addr, read_bytes, zero_bytes, true);
+    ofs += read_bytes;
+    length -= read_bytes;
+    addr += read_bytes;
+  }
 }
 
 static void 
