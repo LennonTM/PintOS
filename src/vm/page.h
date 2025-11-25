@@ -54,6 +54,11 @@ struct spt_entry {
   struct hash_elem elem;
 };
 
+/* Returns the spt_entry containing the given virtual address,
+or a null pointer if no such entry exists. */
+struct spt_entry *
+spt_lookup (const void *address, struct hash* spt);
+
 /* Returns a hash value for spt_entry p. */
 unsigned
 spt_hash (const struct hash_elem *p_, void *aux UNUSED);
@@ -66,5 +71,9 @@ void *aux UNUSED);
 void record_file_page (struct file *file, off_t ofs, uint8_t *upage,
                        uint32_t page_read_bytes, uint32_t page_zero_bytes,
                        bool writable);
+
+/* Removes the page at address upage in the spt table. */
+void
+remove_page (void* upage);
 
 #endif 
