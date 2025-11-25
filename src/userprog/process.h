@@ -6,6 +6,7 @@
 #include "threads/synch.h"
 #include "userprog/fd_table.h"
 #include "hash.h"
+#include "vm/mmap.h"
 
 #define PROC_SUCC (0)  /* Exit code for normal process termination. */
 #define PROC_ERR (-1)  /* Exit code for erroneous process termination. */
@@ -33,6 +34,8 @@ struct process
     /* Lists all children entries of this process 
        This allows communication with all children. */
     struct list child_entries; 
+
+    
 
     struct file *executable_file;
   };

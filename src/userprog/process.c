@@ -24,6 +24,7 @@
 #include "devices/timer.h"
 #include "vm/frame.h"
 #include "vm/page.h"
+#include "vm/mmap.h"
 
 static bool process_init (struct thread *t);
 static thread_func start_process NO_RETURN;
@@ -159,6 +160,8 @@ process_init (struct thread *t)
 
   /* Initialise process id */
   list_init(&process->child_entries);
+
+  mmap_table_init(&process->mmap_table);
   
   /* Link thread to its process. */
   t->process = process;
@@ -439,6 +442,7 @@ process_exit (int exit_code)
       clean_child_to_parent_entries (exit_code);
 
       free_fd_table (&cur->fd_table);
+      free_mmap_table (&cur->mmap_table);
 
       /* Destroy the current process's page directory and switch back
          to the kernel-only page directory. */
