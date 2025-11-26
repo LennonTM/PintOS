@@ -23,6 +23,9 @@ struct mmap_entry {
 void mmap_table_init (struct mmap_table* mmap_table);
 void free_mmap_table(struct mmap_table* mmap_table);
 
+/* Performs a linear search for entry with id of mapping. */
+struct mmap_entry* get_entry(struct mmap_table* mmap_table, mapid_t mapping);
+
 /* Creates new entry in table with a single page*/
 mapid_t new_entry (struct mmap_table* mmap_table, void* upage);
 /* Adds another page to the mapping by incrementing page_no */
