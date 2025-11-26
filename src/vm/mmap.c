@@ -1,6 +1,9 @@
 #include "threads/vaddr.h"
 #include "vm/mmap.h"
 #include "vm/page.h"
+#include "userprog/pagedir.h"
+#include "userprog/syscall.h"
+#include "threads/thread.h"
 
 void mmap_table_init (struct mmap_table* mmap_table) {
     list_init (&mmap_table->list);
@@ -13,13 +16,9 @@ void free_mmap_table(struct mmap_table* mmap_table) {
     struct list_elem *e = list_begin (list); 
     while (e != list_end (list)) {
         struct mmap_entry *entry = list_entry (e, struct mmap_entry, elem);
-        void* upage = entry->upage;
-        for (int i = 0; i < entry->no_pages; i++) {
-            remove_page(upage + i*PGSIZE);
-        }
         /* Remove list_elem from the list before freeing the entry */
         e = list_remove (e);
-        free (entry);
+        free_entry(mmap_table, entry);
     }
 }
 
@@ -53,12 +52,29 @@ void extend(struct mmap_table* mmap_table, mapid_t mapping) {
     struct mmap_entry * entry = list_entry (e, struct mmap_entry, elem);
     entry->no_pages++;   
 }
-/* Iterates through the pages mapped at mapping, removes them from the SPT table 
-   and removes the entry in the mmap_table. */
-void munmap(struct mmap_table* mmap_table, mapid_t mapping) {
+/* Iterates through the pages mapped at mapping, removes them from the 
+   SPT table/page table and removes/frees the entry in the mmap_table. 
+   Performs write backs to file if page is dirty. */
+void free_entry(struct mmap_table* mmap_table, mapid_t mapping) {
     struct list_elem *e = list_begin(&mmap_table->list);
     struct mmap_entry * entry = list_entry (e, struct mmap_entry, elem);
+    struct file* file = open(entry->fd);
+    struct hash* spt = thread_current()->process->spt;
+    uint32_t *pagedir = thread_current()->process->pagedir;
+    void* upage = entry->upage;
     for (int i = 0; i < entry->no_pages; i++) {
-        remove_page(entry->upage + i*PGSIZE);                 
+        /* There are two cases either the page wasnt loaded or it was,
+           if it wasn't loaded it is in SPT, otherwise it resides in page
+           table */
+        if (pagedir_get_page(pagedir, upage) == NULL) {
+            remove_page(upage + i*PGSIZE);
+            continue;
+        }
+        if (pagedir_is_dirty(pagedir, upage)) {
+            write (entry->fd, upage, PGSIZE);
+        }            
+        pagedir_clear_page(pagedir, upage);
     }
+    list_remove(&entry->elem);
+    free(entry);
 }

@@ -27,9 +27,10 @@ void free_mmap_table(struct mmap_table* mmap_table);
 mapid_t new_entry (struct mmap_table* mmap_table, void* upage);
 /* Adds another page to the mapping by incrementing page_no */
 void extend(struct mmap_table* mmap_table, mapid_t mapping);
-/* Iterates through the pages mapped at mapping, removes them from the SPT table 
-   and removes the entry in the mmap_table. */
-void munmap(struct mmap_table* mmap_table, mapid_t mapping);
+/* Iterates through the pages mapped at mapping, removes them from the 
+   SPT table/page table and removes/frees the entry in the mmap_table. 
+   Performs write backs to file if page is dirty. */
+void free_entry(struct mmap_table* mmap_table, mapid_t mapping);
 
 
 #endif /* vm/mmap.h */
