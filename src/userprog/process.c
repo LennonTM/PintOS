@@ -742,13 +742,6 @@ load_page_from_file (struct file *file, off_t ofs, uint8_t *upage,
                      uint32_t page_read_bytes, uint32_t page_zero_bytes,
                      bool writable)
 {
-  // struct shared_entry *shared_entry = get_shared_entry (file, ofs);
-  // if (shared_entry != NULL) {
-  //   ASSERT (!writable);
-  //   /* link the user page to existing frame */
-  //   kpage = shared_entry->kpage;
-  //   return install_page (upage, kpage, writable);
-  // }
   /* Get a new page of memory. */
   uint8_t *kpage = frame_alloc (PAL_USER);
   if (kpage == NULL){
@@ -768,13 +761,6 @@ load_page_from_file (struct file *file, off_t ofs, uint8_t *upage,
     return NULL; 
   }
   memset (kpage + page_read_bytes, 0, page_zero_bytes);
-
-  // if (!writable) {
-  //   create_shared_entry (file, ofs, kpage, get_entry (
-  //     &thread_current ()->process->spt,
-  //     upage
-  //   ));
-  // }
 
   return kpage;
 }

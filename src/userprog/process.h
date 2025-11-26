@@ -6,6 +6,7 @@
 #include "threads/synch.h"
 #include "userprog/fd_table.h"
 #include "hash.h"
+#include "vm/page.h"
 
 #define PROC_SUCC (0)  /* Exit code for normal process termination. */
 #define PROC_ERR (-1)  /* Exit code for erroneous process termination. */

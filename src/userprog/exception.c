@@ -169,7 +169,6 @@ page_fault (struct intr_frame *f)
       case ZERO:
         PANIC("UNIMPLEMENTED: SWAP IN PAGE FAULT");
     }
-    remove_entry (&proc->spt, spt_entry);
     return;
   }
 

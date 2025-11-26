@@ -1,5 +1,7 @@
 #include <stdlib.h>
 #include "vm/shared.h"
+#include "vm/page.h"
+#include "vm/frame.h"
 #include "filesys/off_t.h"
 #include "lib/kernel/hash.h"
 #include "threads/malloc.h"
@@ -35,25 +37,25 @@ get_shared_entry (struct file *file, off_t offset) {
 /* Creates initial shared_entry for the first process to load the page */
 struct shared_entry *
 create_shared_entry (struct file *file, off_t offset,
-                     void *kpage, struct spt_entry *spt_entry)
+                     void *kpage, size_t page_read_bytes)
 {
-  struct shared_entry *shared_entry = 
+  struct shared_entry *shared_entry =
     malloc (sizeof (struct shared_entry));
-    if (shared_entry == NULL) {
+  if (shared_entry == NULL) {
     return NULL;
   }
   shared_entry->file = file;
   shared_entry->offset = offset;
   shared_entry->kpage = kpage;
+  shared_entry->page_read_bytes = page_read_bytes;
   list_init (&shared_entry->spt_ptrs);
-  list_push_front (&shared_entry->spt_ptrs, &spt_entry->aux.file.elem);
-  struct hash_elem *prev_elem = 
+
+  struct hash_elem *prev_elem =
     hash_insert (&shared_table, &shared_entry->elem);
   ASSERT (prev_elem == NULL);
   
   return shared_entry;
 }
-
 
 /* Returns a hash value for shared_entry p. */
 unsigned

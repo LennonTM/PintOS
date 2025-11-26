@@ -1,4 +1,6 @@
 #include "vm/page.h"
+#include "vm/shared.h"
+#include "vm/frame.h"
 #include "lib/debug.h"
 #include "userprog/process.h"
 #include "filesys/file.h"
@@ -93,7 +95,41 @@ spt_load_file_page (struct spt_entry* spt_entry) {
   off_t offset           = spt_entry->aux.file.ofs;
   size_t page_read_bytes = spt_entry->aux.file.page_read_bytes;
   size_t page_zero_bytes = spt_entry->aux.file.page_zero_bytes;
-  return load_page_from_file (file, offset, upage, page_read_bytes,
-                              page_zero_bytes, writable) != NULL;
+  struct shared_entry *shared_entry;
+  /* Check if the page has been loaded by other process */
+  shared_entry = get_shared_entry (file, offset);
+  if (shared_entry != NULL) {
+    ASSERT (!writable);
+    /* Link the user page to existing frame */
+    uint8_t *kpage = shared_entry->kpage;
+    spt_share_entry (spt_entry, &shared_entry->spt_ptrs);
+    return frame_install_page (spt_entry->upage, kpage, writable);
+  }
+  
+  /* Load a new page */
+  uint8_t *kpage = load_page_from_file (file, offset, upage, page_read_bytes,
+                                        page_zero_bytes, writable);
+  if (kpage == NULL) {
+    return false;
+  }
+  /* Store information about it in a shared table */
+  if (!writable) {
+    shared_entry = create_shared_entry (file, offset, kpage, page_read_bytes);
+    spt_share_entry (spt_entry, &shared_entry->spt_ptrs);
+  }
+  else {
+    /* TODO: Remove for now, for eviction probably need
+     * to transition to another state, e.g., FILE_LOADED */
+    remove_entry (&thread_current()->process->spt, spt_entry);
+  }
+
+  return true;
+}
+
+/* Turn entry into shared one, and add it on a corresponding list */
+void
+spt_share_entry (struct spt_entry *spt_entry, struct list *shared_list) {
+  spt_entry->status = SHARED;
+  list_push_front (shared_list, &spt_entry->aux.shared.elem);
 }
 
