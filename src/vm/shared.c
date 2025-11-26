@@ -2,6 +2,7 @@
 #include "vm/shared.h"
 #include "filesys/off_t.h"
 #include "lib/kernel/hash.h"
+#include "threads/malloc.h"
 
 /* frame_table_entry is an array of all frame_table entries */
 static struct hash shared_table;
@@ -13,6 +14,46 @@ shared_table_init (void) {
     PANIC("Failed to initialise shared_table");
   }
 }
+
+/* Retrieve entry from the table by file pointer and offset */
+struct shared_entry *
+get_shared_entry (struct file *file, off_t offset) {
+  struct shared_entry key_entry = (struct shared_entry) {
+    .file = file,
+    .offset = offset
+  };
+  struct hash_elem *shared_entry_elem =
+    hash_find (&shared_table, &key_entry.elem);
+  if (shared_entry_elem == NULL) {
+    return NULL;
+  }
+  struct shared_entry *shared_entry =
+    hash_entry (shared_entry_elem, struct shared_entry, elem);
+  return shared_entry;
+}
+
+/* Creates initial shared_entry for the first process to load the page */
+struct shared_entry *
+create_shared_entry (struct file *file, off_t offset,
+                     void *kpage, struct spt_entry *spt_entry)
+{
+  struct shared_entry *shared_entry = 
+    malloc (sizeof (struct shared_entry));
+    if (shared_entry == NULL) {
+    return NULL;
+  }
+  shared_entry->file = file;
+  shared_entry->offset = offset;
+  shared_entry->kpage = kpage;
+  list_init (&shared_entry->spt_ptrs);
+  list_push_front (&shared_entry->spt_ptrs, &spt_entry->aux.file.elem);
+  struct hash_elem *prev_elem = 
+    hash_insert (&shared_table, &shared_entry->elem);
+  ASSERT (prev_elem == NULL);
+  
+  return shared_entry;
+}
+
 
 /* Returns a hash value for shared_entry p. */
 unsigned

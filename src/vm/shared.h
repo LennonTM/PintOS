@@ -7,6 +7,7 @@
 #include "lib/kernel/hash.h"
 #include <debug.h>
 #include "filesys/file.h"
+#include "vm/page.h"
 
 /* Entry to the read-only-executable page table. */
 struct shared_entry {
@@ -20,21 +21,20 @@ struct shared_entry {
   struct hash_elem elem;
 };
 
-struct shared_list_elem {
-  struct spt_entry *spt_ptr;
-  struct list_elem elem;
-};
-
-/* Returns a hash value for shared_entry p. */
 unsigned
 shared_hash (const struct hash_elem *p_, void *aux UNUSED);
 
-/* Returns true if spt_entry a precedes spt_entry b. */
 bool
 shared_less (const struct hash_elem *a_, const struct hash_elem *b_,
 void *aux UNUSED);
 
-/* Initialises shared table of read only executables */
 void shared_table_init (void);
+
+struct shared_entry *
+create_shared_entry (struct file *file, off_t offset,
+                     void *kpage, struct spt_entry *spt_entry);
+
+struct shared_entry *
+get_shared_entry (struct file *file, off_t offset);
 
 #endif

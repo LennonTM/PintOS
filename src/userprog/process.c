@@ -24,6 +24,7 @@
 #include "devices/timer.h"
 #include "vm/frame.h"
 #include "vm/page.h"
+#include "vm/shared.h"
 
 static bool process_init (struct thread *t);
 static thread_func start_process NO_RETURN;
@@ -743,6 +744,13 @@ load_page_from_file (struct file *file, off_t ofs, uint8_t *upage,
                      uint32_t page_read_bytes, uint32_t page_zero_bytes,
                      bool writable)
 {
+  struct shared_entry *shared_entry = get_shared_entry (file, ofs);
+  if (shared_entry != NULL) {
+    ASSERT (!writable);
+    PANIC ("shared entry detected (but not implemented yet)");
+    /* link the user page to existing frame */
+    return true;
+  }
   /* Get a new page of memory. */
   uint8_t *kpage = frame_alloc (PAL_USER);
   if (kpage == NULL){
@@ -764,6 +772,14 @@ load_page_from_file (struct file *file, off_t ofs, uint8_t *upage,
     return false; 
   }
   memset (kpage + page_read_bytes, 0, page_zero_bytes);
+
+  if (!writable) {
+    create_shared_entry (file, ofs, kpage, get_entry (
+      &thread_current ()->process->spt,
+      upage
+    ));
+  }
+
   return true;
 }
 
