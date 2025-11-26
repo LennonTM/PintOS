@@ -164,13 +164,7 @@ page_fault (struct intr_frame *f)
         PANIC("UNIMPLEMENTED: SWAP IN PAGE FAULT");
       case FILE:
         /* Page is to be lazy-loaded from a file */
-        load_page_from_file (
-          spt_entry->aux.file.file,
-          spt_entry->aux.file.ofs,
-          spt_entry->upage,
-          spt_entry->aux.file.page_read_bytes,
-          spt_entry->aux.file.page_zero_bytes,
-          spt_entry->writable);
+        spt_load_file_page (spt_entry);
         break;
       case ZERO:
         PANIC("UNIMPLEMENTED: SWAP IN PAGE FAULT");
