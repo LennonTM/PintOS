@@ -735,14 +735,13 @@ validate_segment (const struct Elf32_Phdr *phdr, struct file *file)
    A page initialized by this function must be writable by the
    user process if WRITABLE is true, read-only otherwise.
 
-   Return true if successful, false if a memory allocation error
-   or disk read error occurs. */
-bool
+   If successful, returns kernel virtual address of the frame assigned,
+   If a memory allocation error or disk read error occurs, return NULL. */
+uint8_t *
 load_page_from_file (struct file *file, off_t ofs, uint8_t *upage,
                      uint32_t page_read_bytes, uint32_t page_zero_bytes,
                      bool writable)
 {
-  uint8_t *kpage;
   // struct shared_entry *shared_entry = get_shared_entry (file, ofs);
   // if (shared_entry != NULL) {
   //   ASSERT (!writable);
@@ -751,22 +750,22 @@ load_page_from_file (struct file *file, off_t ofs, uint8_t *upage,
   //   return install_page (upage, kpage, writable);
   // }
   /* Get a new page of memory. */
-  kpage = frame_alloc (PAL_USER);
+  uint8_t *kpage = frame_alloc (PAL_USER);
   if (kpage == NULL){
-    return false;
+    return NULL;
   }
 
   /* Add the page to the process's address space. */
   if (!frame_install_page (upage, kpage, writable)) 
   {
     frame_free (kpage);
-    return false; 
+    return NULL; 
   }
 
   /* Load data into the page. */
   file_seek (file, ofs);
   if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes){
-    return false; 
+    return NULL; 
   }
   memset (kpage + page_read_bytes, 0, page_zero_bytes);
 
@@ -777,7 +776,7 @@ load_page_from_file (struct file *file, off_t ofs, uint8_t *upage,
   //   ));
   // }
 
-  return true;
+  return kpage;
 }
 
 /* Loads a page at upage and fills it with zeros. Installs it into the page 
