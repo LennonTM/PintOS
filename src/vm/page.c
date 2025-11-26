@@ -87,10 +87,10 @@ destroy_spt (struct hash *spt) {
 
 bool
 spt_load_file_page (struct spt_entry* spt_entry) {
-  void *upage = spt_entry->upage;
-  bool writable = spt_entry->writable;
-  struct file *file =spt_entry->aux.file.file;
-  off_t offset = spt_entry->aux.file.ofs;
+  void *upage            = spt_entry->upage;
+  bool writable          = spt_entry->writable;
+  struct file *file      = spt_entry->aux.file.file;
+  off_t offset           = spt_entry->aux.file.ofs;
   size_t page_read_bytes = spt_entry->aux.file.page_read_bytes;
   size_t page_zero_bytes = spt_entry->aux.file.page_zero_bytes;
   return load_page_from_file (file, offset, upage, page_read_bytes,
