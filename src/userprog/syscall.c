@@ -426,6 +426,26 @@ handle_close (void *esp, uint32_t *eax UNUSED) {
   close(fd);
 }
 
+/* Unmaps the mapping designated by mapping, which must be a mapping ID 
+   returned by a previous call to mmap by the same process that has not 
+   yet been unmapped.*/
+static void munmap (mapid_t mapping) {
+  struct mmap_table* mmap_table = &thread_current()->process->mmap_table;
+  if (
+    get_entry(mmap_table, mapping) != NULL &&
+    mapping >= FIRST_MAP_ID
+  ) {
+    free_entry(mmap_table, mapping);
+  }
+}
+
+static void 
+handle_munmap (void* esp, uint32_t *eax UNUSED) {
+  mapid_t mapping = (mapid_t) parse_argument (&esp);
+  munmap(mapping);
+}
+
+
 /* Maps the file open as fd into the process’s virtual address space. 
    The entire file is mapped into consecutive virtual pages starting at addr.
 */
@@ -445,6 +465,7 @@ static mapid_t mmap (int fd, void *addr) {
 
   struct fd_table *fd_table = &thread_current()->process->fd_table;
   struct hash *spt = &thread_current()->process->spt;
+  struct mmap_table* mmap_table = &thread_current()->process->mmap_table;
   struct file* file = get_file (fd_table, fd);
   if (file == NULL) {
       return MAP_FAILED;
@@ -461,10 +482,16 @@ static mapid_t mmap (int fd, void *addr) {
        failure. We check the SPT and page table for this. */
     if (
       pagedir_get_page(pagedir, addr) != NULL || 
-      stp_lookup(addr, spt) != NULL
+      spt_lookup(addr, spt) != NULL
     ) {
       munmap(map_id);
       return MAP_FAILED;
+    }
+    if (map_id == MAP_FAILED) {
+      map_id = new_entry(mmap_table, addr, fd);
+    }
+    else {
+      extend(mmap_table, map_id);
     }
     /*We lazy load the page, if valid.*/
     record_file_page(file, ofs, addr, read_bytes, zero_bytes, true);
@@ -472,6 +499,7 @@ static mapid_t mmap (int fd, void *addr) {
     length -= read_bytes;
     addr += read_bytes;
   }
+  return map_id;
 }
 
 static void 
@@ -479,25 +507,6 @@ handle_mmap (void* esp, uint32_t *eax UNUSED) {
   int fd = (int) parse_argument(&esp);
   void *addr = (void*) parse_argument(&esp);
   *eax = mmap(fd, addr);
-}
-
-/* Unmaps the mapping designated by mapping, which must be a mapping ID 
-   returned by a previous call to mmap by the same process that has not 
-   yet been unmapped.*/
-static void munmap (mapid_t mapping) {
-  struct mmap_table* mmap_table = thread_current()->process->mmap_table;
-  if (
-    get_entry(mmap_table, mapping) != NULL &&
-    mapping >= FIRST_MAP_ID
-  ) {
-    free_entry(mmap_table, mapping);
-  }
-}
-
-static void 
-handle_munmap (void* esp, uint32_t *eax UNUSED) {
-  mapid_t mapping = (mapid_t) parse_argument (&esp);
-  munmap(mapping);
 }
 
 #define TOTAL_SYSCALLS 15
