@@ -149,9 +149,13 @@ process_init (struct thread *t)
   if (process == NULL)
     return false;
 
+  bool spt_initialised = hash_init(&process->spt, spt_hash, spt_less, NULL);
+  if (!spt_initialised) {
+    PANIC ("Failed to initialised spt page: kernel ran out of memory");
+  }
+  
   /* Initialise process attributes. */
   process->pagedir = NULL;
-  hash_init(&process->spt, spt_hash, spt_less, NULL);
   process->thread = t;
   process->recover_flag = false;
   process->executable_file = NULL;
