@@ -5,6 +5,7 @@
 /* Map region identifier. */
 typedef int mapid_t;
 #define MAP_FAILED ((mapid_t) -1)
+#define FIRST_MAP_ID 0
 
 struct mmap_table
   {

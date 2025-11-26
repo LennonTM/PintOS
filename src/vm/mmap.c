@@ -29,14 +29,14 @@ get_next_mapid (struct mmap_table* mmap_table) {
   /* As an invariant the last element in mmap_table has the largest id thus
      we choose the next id as this should not have been chosen already. The 
      first id is 0. */
-  int id = list_empty (list) ? 0 :
+  int id = list_empty (list) ? FIRST_MAP_ID :
     list_entry(list_back(list), struct mmap_entry, elem)->id + 1;
   return id;
 }
 
 /* Performs a linear search for entry with id of mapping. */
 struct mmap_entry* get_entry(struct mmap_table* mmap_table, mapid_t mapping) {
-    if (mapping < 0) {
+    if (mapping < FIRST_MAP_ID) {
         return NULL;
     }
     for (
