@@ -35,13 +35,14 @@ get_next_mapid (struct mmap_table* mmap_table) {
 }
 
 /* Creates new entry in table with a single page*/
-mapid_t new_entry (struct mmap_table* mmap_table, void* upage) {
+mapid_t new_entry (struct mmap_table* mmap_table, void* upage, int fd) {
     struct list* list = &mmap_table->list;
     int id = get_next_mapid (mmap_table);
     struct mmap_entry* entry = malloc (sizeof(struct mmap_entry));
     entry->id = id;
     entry->no_pages = 1;
     entry->upage = upage;
+    entry->fd = fd;
     list_push_back(list ,&entry->elem);
     return id;
 }
@@ -58,6 +59,6 @@ void munmap(struct mmap_table* mmap_table, mapid_t mapping) {
     struct list_elem *e = list_begin(&mmap_table->list);
     struct mmap_entry * entry = list_entry (e, struct mmap_entry, elem);
     for (int i = 0; i < entry->no_pages; i++) {
-            remove_page(entry->upage + i*PGSIZE);
+        remove_page(entry->upage + i*PGSIZE);                 
     }
 }

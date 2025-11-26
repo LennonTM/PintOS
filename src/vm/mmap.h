@@ -13,6 +13,7 @@ struct mmap_table
 
 struct mmap_entry {
     mapid_t id; /* Unique indentifier of the memory mapping within a process. */
+    int fd;     /* File descriptor of the memory mapping. */
     void* upage; /* The virtual address of the first page of the mapping. */
     int no_pages; /* The number of pages represented by the mapping. */
     struct list_elem elem;
