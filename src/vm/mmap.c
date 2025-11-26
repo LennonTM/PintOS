@@ -5,6 +5,7 @@
 #include "userprog/syscall.h"
 #include "threads/thread.h"
 #include "userprog/fd_table.h"
+#include "threads/malloc.h"
 
 void mmap_table_init (struct mmap_table* mmap_table) {
     list_init (&mmap_table->list);
@@ -67,8 +68,7 @@ mapid_t new_entry (struct mmap_table* mmap_table, void* upage, int fd) {
 
 /* Adds another page to the mapping by incrementing page_no */
 void extend(struct mmap_table* mmap_table, mapid_t mapping) {
-    struct list_elem *e = list_begin(&mmap_table->list);
-    struct mmap_entry * entry = list_entry (e, struct mmap_entry, elem);
+    struct mmap_entry * entry = get_entry(mmap_table, mapping);
     entry->no_pages++;   
 }
 /* Iterates through the pages mapped at mapping, removes them from the 
@@ -78,25 +78,28 @@ void free_entry(struct mmap_table* mmap_table, mapid_t mapping) {
     struct mmap_entry * entry = get_entry(mmap_table, mapping);
     ASSERT(entry != NULL);
 
-    struct file* file = open(entry->fd);
-    struct hash* spt = thread_current()->process->spt;
     uint32_t *pagedir = thread_current()->process->pagedir;
-
+    struct fd_table* fd_table = &thread_current()->process->fd_table;
+    struct file* file = get_file(fd_table, entry->fd);
+    ASSERT (file != NULL);
     void* upage = entry->upage;
+    
+    int offset = 0;
     for (int i = 0; i < entry->no_pages; i++) {
         /* There are two cases either the page wasnt loaded or it was,
            if it wasn't loaded it is in SPT, otherwise it resides in page
            table */
         if (pagedir_get_page(pagedir, upage) == NULL) {
-            remove_page(upage + i*PGSIZE);
+            remove_page(upage);
             continue;
         }
         if (pagedir_is_dirty(pagedir, upage)) {
-            write (entry->fd, upage, PGSIZE);
+            file_write_at(file, upage, PGSIZE, offset);
         }            
         pagedir_clear_page(pagedir, upage);
+        upage += PGSIZE;
+        offset += PGSIZE;
     }
     list_remove(&entry->elem);
     free(entry);
-    close(entry->fd);
 }

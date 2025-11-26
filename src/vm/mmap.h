@@ -28,7 +28,7 @@ void free_mmap_table(struct mmap_table* mmap_table);
 struct mmap_entry* get_entry(struct mmap_table* mmap_table, mapid_t mapping);
 
 /* Creates new entry in table with a single page*/
-mapid_t new_entry (struct mmap_table* mmap_table, void* upage);
+mapid_t new_entry (struct mmap_table* mmap_table, void* upage, int fd);
 /* Adds another page to the mapping by incrementing page_no */
 void extend(struct mmap_table* mmap_table, mapid_t mapping);
 /* Iterates through the pages mapped at mapping, removes them from the 
