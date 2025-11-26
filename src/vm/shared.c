@@ -9,10 +9,9 @@ static struct hash shared_table;
 /* Initialises shared table of read only executables */
 void
 shared_table_init (void) {
-    /* Set up frame table */
-    if (!hash_init(&shared_table, shared_hash, shared_less, NULL)) {
-      PANIC("Failed to initialise shared_table");
-    }
+  if (!hash_init(&shared_table, shared_hash, shared_less, NULL)) {
+    PANIC("Failed to initialise shared_table");
+  }
 }
 
 /* Returns a hash value for shared_entry p. */
