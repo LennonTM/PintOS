@@ -155,7 +155,7 @@ page_fault (struct intr_frame *f)
   struct process *proc = thread_current()->process; 
   void *fault_page = pg_round_down(fault_addr);
 
-  struct spt_entry *spt_entry = get_entry (&proc->spt, fault_page);
+  struct spt_entry *spt_entry = spt_get_entry (&proc->spt, fault_page);
   if (spt_entry != NULL) {
     switch (spt_entry->status) {
       case FRAME:

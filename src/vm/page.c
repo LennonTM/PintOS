@@ -26,9 +26,9 @@ void *aux UNUSED)
 
 /* Records data in SPT about a page to be lazy-loaded from a file */
 void
-record_file_page (struct hash *spt, struct file *file, off_t ofs,
-                  uint8_t *upage, uint32_t page_read_bytes,
-                  uint32_t page_zero_bytes, bool writable)
+spt_record_file_page (struct hash *spt, struct file *file, off_t ofs,
+                      uint8_t *upage, uint32_t page_read_bytes,
+                      uint32_t page_zero_bytes, bool writable)
 {
   struct spt_entry *entry = 
     (struct spt_entry *) malloc (sizeof (struct spt_entry));
@@ -50,7 +50,7 @@ record_file_page (struct hash *spt, struct file *file, off_t ofs,
 /* Removes provided entry from the SPT
    returns true if entry was removed successfully */
 bool 
-remove_entry (struct hash *spt, struct spt_entry *entry) {
+spt_remove_entry (struct hash *spt, struct spt_entry *entry) {
   struct hash_elem *removed_elem = hash_delete (spt, &entry->elem);
   free (entry);
   return removed_elem != NULL;
@@ -60,7 +60,7 @@ remove_entry (struct hash *spt, struct spt_entry *entry) {
    corresponding to provided user vaddr of the page 
    NULL if not entry exists */
 struct spt_entry *
-get_entry (struct hash *spt, void *upage) {
+spt_get_entry (struct hash *spt, void *upage) {
   struct spt_entry key_entry = (struct spt_entry) {
     .upage = upage
   };
@@ -75,7 +75,7 @@ get_entry (struct hash *spt, void *upage) {
 
 /* Helper function for destory_spt, destroys memory for the entry */
 static void
-destroy_spt_entry (struct hash_elem *e, void *aux UNUSED)
+spt_destroy_entry (struct hash_elem *e, void *aux UNUSED)
 {
   struct spt_entry *spt_entry = hash_entry (e, struct spt_entry, elem);
   
@@ -83,8 +83,8 @@ destroy_spt_entry (struct hash_elem *e, void *aux UNUSED)
 }
 
 void
-destroy_spt (struct hash *spt) {
-  hash_destroy (spt, destroy_spt_entry);
+spt_destroy (struct hash *spt) {
+  hash_destroy (spt, spt_destroy_entry);
 }
 
 bool
@@ -120,7 +120,7 @@ spt_load_file_page (struct spt_entry* spt_entry) {
   else {
     /* TODO: Remove for now, for eviction probably need
      * to transition to another state, e.g., FILE_LOADED */
-    remove_entry (&thread_current()->process->spt, spt_entry);
+    spt_remove_entry (&thread_current()->process->spt, spt_entry);
   }
 
   return true;

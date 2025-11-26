@@ -441,7 +441,7 @@ process_exit (int exit_code)
 
       free_fd_table (&cur->fd_table);
       
-      destroy_spt (&cur->spt);
+      spt_destroy (&cur->spt);
       /* Destroy the current process's page directory and switch back
          to the kernel-only page directory. */
       pd = cur->pagedir;
@@ -816,7 +816,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 
       /* Record data about a lazy-loaded page in SPT */
       struct hash *spt = &thread_current()->process->spt;
-      record_file_page (spt, file, ofs, upage,
+      spt_record_file_page (spt, file, ofs, upage,
                        page_read_bytes, page_zero_bytes,
                        writable);
 
