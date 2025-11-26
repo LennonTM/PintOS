@@ -13,6 +13,7 @@
 #include "lib/stdio.h"
 #include "vm/page.h"
 #include "vm/mmap.h"
+#include "userprog/pagedir.h"
 
 static void syscall_handler (struct intr_frame *);
 
@@ -429,7 +430,9 @@ handle_close (void *esp, uint32_t *eax UNUSED) {
    The entire file is mapped into consecutive virtual pages starting at addr.
 */
 static mapid_t mmap (int fd, void *addr) {
-  if (fd == 0 || fd == 1) {
+  mapid_t map_id = MAP_FAILED;
+  /* We cant memory map the stdin/stdout or negative fd */
+  if (fd < USER_FIRST_FD) {
     return MAP_FAILED;
   }
   int length = filesize(fd);
@@ -440,16 +443,30 @@ static mapid_t mmap (int fd, void *addr) {
     return MAP_FAILED;
   }
 
+  struct fd_table *fd_table = &thread_current()->process->fd_table;
+  struct hash *spt = &thread_current()->process->spt;
+  struct file* file = get_file (fd_table, fd);
+  if (file == NULL) {
+      return MAP_FAILED;
+  }
+
+  uint32_t *pagedir = thread_current()->process->pagedir;
+
   int ofs = 0;
   while (length > 0) {
     int read_bytes = min(length, PGSIZE);
     int zero_bytes = PGSIZE - read_bytes;
-    struct fd_table *fd_table = &thread_current()->process->fd_table;
-    struct file* file = get_file (fd_table, fd);
-    if (file == NULL) {
+  
+    /* If the page is already being used, we clean up the mapping and return 
+       failure. We check the SPT and page table for this. */
+    if (
+      pagedir_get_page(pagedir, addr) != NULL || 
+      stp_lookup(addr, spt) != NULL
+    ) {
+      munmap(map_id);
       return MAP_FAILED;
     }
-    
+    /*We lazy load the page, if valid.*/
     record_file_page(file, ofs, addr, read_bytes, zero_bytes, true);
     ofs += read_bytes;
     length -= read_bytes;
@@ -468,7 +485,13 @@ handle_mmap (void* esp, uint32_t *eax UNUSED) {
    returned by a previous call to mmap by the same process that has not 
    yet been unmapped.*/
 static void munmap (mapid_t mapping) {
-
+  struct mmap_table* mmap_table = thread_current()->process->mmap_table;
+  if (
+    get_entry(mmap_table, mapping) != NULL &&
+    mapping >= FIRST_MAP_ID
+  ) {
+    free_entry(mmap_table, mapping);
+  }
 }
 
 static void 
