@@ -744,15 +744,16 @@ load_page_from_file (struct file *file, off_t ofs, uint8_t *upage,
                      uint32_t page_read_bytes, uint32_t page_zero_bytes,
                      bool writable)
 {
+  uint8_t *kpage;
   struct shared_entry *shared_entry = get_shared_entry (file, ofs);
   if (shared_entry != NULL) {
     ASSERT (!writable);
-    PANIC ("shared entry detected (but not implemented yet)");
     /* link the user page to existing frame */
-    return true;
+    kpage = shared_entry->kpage;
+    return install_page (upage, kpage, writable);
   }
   /* Get a new page of memory. */
-  uint8_t *kpage = frame_alloc (PAL_USER);
+  kpage = frame_alloc (PAL_USER);
   if (kpage == NULL){
     return false;
   }
