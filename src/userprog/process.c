@@ -678,8 +678,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
 /* load() helpers. */
 
-static bool install_page (void *upage, void *kpage, bool writable);
-
 /* Checks whether PHDR describes a valid, loadable segment in
    FILE and returns true if so, false otherwise. */
 static bool
@@ -745,13 +743,13 @@ load_page_from_file (struct file *file, off_t ofs, uint8_t *upage,
                      bool writable)
 {
   uint8_t *kpage;
-  struct shared_entry *shared_entry = get_shared_entry (file, ofs);
-  if (shared_entry != NULL) {
-    ASSERT (!writable);
-    /* link the user page to existing frame */
-    kpage = shared_entry->kpage;
-    return install_page (upage, kpage, writable);
-  }
+  // struct shared_entry *shared_entry = get_shared_entry (file, ofs);
+  // if (shared_entry != NULL) {
+  //   ASSERT (!writable);
+  //   /* link the user page to existing frame */
+  //   kpage = shared_entry->kpage;
+  //   return install_page (upage, kpage, writable);
+  // }
   /* Get a new page of memory. */
   kpage = frame_alloc (PAL_USER);
   if (kpage == NULL){
@@ -759,13 +757,11 @@ load_page_from_file (struct file *file, off_t ofs, uint8_t *upage,
   }
 
   /* Add the page to the process's address space. */
-  if (!install_page (upage, kpage, writable)) 
+  if (!frame_install_page (upage, kpage, writable)) 
   {
     frame_free (kpage);
     return false; 
   }
-
-  frame_install_page (upage, kpage);
 
   /* Load data into the page. */
   file_seek (file, ofs);
@@ -774,12 +770,12 @@ load_page_from_file (struct file *file, off_t ofs, uint8_t *upage,
   }
   memset (kpage + page_read_bytes, 0, page_zero_bytes);
 
-  if (!writable) {
-    create_shared_entry (file, ofs, kpage, get_entry (
-      &thread_current ()->process->spt,
-      upage
-    ));
-  }
+  // if (!writable) {
+  //   create_shared_entry (file, ofs, kpage, get_entry (
+  //     &thread_current ()->process->spt,
+  //     upage
+  //   ));
+  // }
 
   return true;
 }
@@ -793,12 +789,10 @@ load_page_zeroing (uint8_t *upage, bool writable)
   if (kpage == NULL)
     return false;
 
-  if (!install_page(upage, kpage, writable)) {
+  if (!frame_install_page(upage, kpage, writable)) {
     frame_free(kpage);
     return false;
   }
-
-  frame_install_page (upage, kpage);
 
   return true;
 }
@@ -862,10 +856,9 @@ setup_stack (void **esp)
   if (kpage != NULL) 
     {
       void *upage = ((uint8_t *) PHYS_BASE) - PGSIZE;
-      success = install_page (upage, kpage, true);
+      success = frame_install_page (upage, kpage, true);
       if (success) {
         *esp = PHYS_BASE;
-        frame_install_page(upage, kpage);
       }
       else
         frame_free (kpage);
@@ -882,7 +875,7 @@ setup_stack (void **esp)
    with palloc_get_page().
    Returns true on success, false if UPAGE is already mapped or
    if memory allocation fails. */
-static bool
+bool
 install_page (void *upage, void *kpage, bool writable)
 {
   struct process *cur = thread_current ()->process;
