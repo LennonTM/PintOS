@@ -448,11 +448,11 @@ handle_munmap (void* esp, uint32_t *eax UNUSED) {
    The entire file is mapped into consecutive virtual pages starting at addr.
 */
 static mapid_t mmap (int fd, void *addr) {
-  mapid_t map_id = MAP_FAILED;
   /* We cant memory map the stdin/stdout or negative fd */
   if (fd < USER_FIRST_FD) {
     return MAP_FAILED;
   }
+
   struct fd_table *fd_table = &thread_current()->process->fd_table;
   struct file* og_file = get_file (fd_table, fd);
   if (og_file == NULL) {
@@ -467,37 +467,32 @@ static mapid_t mmap (int fd, void *addr) {
   }
 
   struct hash *spt = &thread_current()->process->spt;
+  uint32_t *pagedir = thread_current()->process->pagedir;
+  /* We check for overlap and fail if so. */
+  for (int i = 0; i < length; i+=PGSIZE) {
+    if (
+      pagedir_get_page(pagedir, addr+i) != NULL || 
+      spt_lookup(addr+i, spt) != NULL
+    ) {
+      return MAP_FAILED;
+    }
+  }
+
   struct mmap_table* mmap_table = &thread_current()->process->mmap_table;
   struct file* file = file_reopen(og_file);
-
-  uint32_t *pagedir = thread_current()->process->pagedir;
-
   int ofs = 0;
+  mapid_t map_id = new_entry(mmap_table, addr, file);
   while (length > 0) {
     int read_bytes = min(length, PGSIZE);
     int zero_bytes = PGSIZE - read_bytes;
-  
-    /* If the page is already being used, we clean up the mapping and return 
-       failure. We check the SPT and page table for this. */
-    if (
-      pagedir_get_page(pagedir, addr) != NULL || 
-      spt_lookup(addr, spt) != NULL
-    ) {
-      munmap(map_id);
-      return MAP_FAILED;
-    }
-    if (map_id == MAP_FAILED) {
-      map_id = new_entry(mmap_table, addr, file);
-    }
-    else {
-      extend(mmap_table, map_id);
-    }
+    increment_pages_no(mmap_table, map_id);
     /*We lazy load the page, if valid.*/
     record_file_page(file, ofs, addr, read_bytes, zero_bytes, true);
     ofs += read_bytes;
     length -= read_bytes;
     addr += read_bytes;
   }
+
   return map_id;
 }
 
