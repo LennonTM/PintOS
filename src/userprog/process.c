@@ -781,7 +781,19 @@ load_page_zeroing (uint8_t *upage, bool writable)
     return false;
   }
 
-  frame_install_page (upage, kpage);
+  struct spt_entry *spte = malloc(sizeof(struct spt_entry));
+  if (spte == NULL)
+  {
+    frame_free(kpage);
+    return false;
+  }
+
+  spte->upage = upage;
+  spte->status = FRAME;
+  spte->writable = writable;
+  spte->aux.frame.k_addr = kpage;
+
+  hash_insert(&thread_current()->process->spt, &spte->elem);
 
   return true;
 }
@@ -849,6 +861,21 @@ setup_stack (void **esp)
       if (success) {
         *esp = PHYS_BASE;
         frame_install_page(upage, kpage);
+
+        struct spt_entry *spte = malloc(sizeof(struct spt_entry));
+        if (spte != NULL)
+        {
+          spte->upage = upage;
+          spte->status = FRAME;
+          spte->writable = true;
+          spte->aux.frame.k_addr = kpage;
+          hash_insert(&thread_current()->process->spt, &spte->elem);
+        }
+        else
+        {
+          frame_free(kpage);
+          return false;
+        }
       }
       else
         frame_free (kpage);
@@ -872,6 +899,13 @@ install_page (void *upage, void *kpage, bool writable)
 
   /* Verify that there's not already a page at that virtual
      address, then map our page there. */
-  return (pagedir_get_page (cur->pagedir, upage) == NULL
-          && pagedir_set_page (cur->pagedir, upage, kpage, writable));
+  bool success = (pagedir_get_page (cur->pagedir, upage) == NULL
+                  && pagedir_set_page (cur->pagedir, upage, kpage, writable));
+
+  if (success)
+  {
+    frame_install_page(upage, kpage);
+  }
+
+  return (success);
 }

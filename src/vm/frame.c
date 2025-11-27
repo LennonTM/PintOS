@@ -1,4 +1,5 @@
 #include <stddef.h>
+#include <string.h>
 #include "vm/frame.h"
 #include "threads/palloc.h"
 #include "threads/malloc.h"
@@ -11,7 +12,12 @@
 #include "vm/page.h"
 #include "devices/swap.h"
 
-static struct lock frame_lock;
+/* Lock prevents race conditions when accessing the frame table
+for allocation and eviction */
+struct lock frame_lock;
+
+/* Used to iterate through frame table to find a 
+victim frame to evict */
 static size_t eviction_search_index = 0;
 
 /* frame_table_entry is an array of all frame_table entries */
@@ -29,19 +35,23 @@ frame_table_init (void) {
     lock_init(&frame_lock);
 }
 
-/* Selects a victim frame, evicts it to swap/file, and returns the kpage */
+/* Selects a frame to evict to swap disk, and returns the freed kpage address */
 static void *
 frame_evict (void) {
     size_t user_pages = get_user_pages();
     struct frame_table_entry *victim = NULL;
     void *kpage = NULL;
 
+    /* We loop through all frames until a 'victim' is found */
     while (true) {
         struct frame_table_entry *e = &frame_table[eviction_search_index];
         void *frame_addr = (void *)((uintptr_t)eviction_search_index * PGSIZE 
                             + (uintptr_t)palloc_get_user_pool_base());
         
         if (!e->pinned && e->owner != NULL) {
+            /* We check if the page has been used recently by checking the hardware
+            'accessed' bit. If it is 1, we set it to 0. If it is 0, that means the
+            page has not been accessed since our last pass. We choose this as our victim. */
             if (pagedir_is_accessed(e->owner->pagedir, e->upage)) {
                 pagedir_set_accessed(e->owner->pagedir, e->upage, false);
             } else {
@@ -62,13 +72,21 @@ frame_evict (void) {
 
     bool is_dirty = pagedir_is_dirty(victim->owner->pagedir, victim->upage);
 
+    /* If page is dirty, we write it to swap to save the data */
     if (spte->status != FILE || is_dirty) {
         spte->status = SWAP;
-        spte->aux.swap.index = swap_out(kpage);
+
+        size_t slot_index = swap_out(kpage);
+        memset(&spte->aux, 0, sizeof(spte->aux));
+
+        spte->aux.swap.index = slot_index;
     }
 
+    /* The next time a process touches the address, it will trigger a
+    page fault, so the page can be loaded again */
     pagedir_clear_page(victim->owner->pagedir, victim->upage);
 
+    /* Reset the frame table entry */
     victim->owner = NULL;
     victim->upage = NULL;
     victim->pinned = false;
@@ -80,14 +98,26 @@ frame_evict (void) {
    the corresponding frame_table_entry will be used after */
 void *
 frame_alloc (enum palloc_flags flags) {
+    /* Kernel allocations bypass the frame table */
     if ((flags & PAL_USER) == 0) return palloc_get_page(flags);
 
-    lock_acquire(&frame_lock);
+    bool lock_held = lock_held_by_current_thread(&frame_lock);
+
+    /* page_fault aquires the lock to safely read the SPT status.
+    frame_alloc must check that the thread does not already hold
+    the lock before trying to aquire it to prevent a deadlock.
+    When the thread holds the lock, we can safely modify the
+    global Frame Table. */
+    if(!lock_held) lock_acquire(&frame_lock);
+
+    /* Attempts to allocate a page from user pool */
     void *kpage = palloc_get_page (flags);
 
+    /* If memory is full, we must evict a page to make room */
     if (kpage == NULL) {
         kpage = frame_evict();
 
+        /* If a zeroed page is requested, we zero the evicted page */
         if (flags & PAL_ZERO) {
             memset(kpage, 0, PGSIZE);
         }
@@ -102,7 +132,7 @@ frame_alloc (enum palloc_flags flags) {
         .accessed = NULL,
     };
 
-    lock_release(&frame_lock);
+    if (!lock_held) lock_release(&frame_lock);
     return kpage;   
 }
 
