@@ -72,7 +72,7 @@ mapid_t new_entry (
 }
 
 /* Adds another page to the mapping by incrementing page_no */
-void extend(struct mmap_table* mmap_table, mapid_t mapping) {
+void increment_pages_no(struct mmap_table* mmap_table, mapid_t mapping) {
     struct mmap_entry * entry = get_entry(mmap_table, mapping);
     entry->no_pages++;   
 }

@@ -34,7 +34,7 @@ mapid_t new_entry (
   struct file* file
 );
 /* Adds another page to the mapping by incrementing page_no */
-void extend(struct mmap_table* mmap_table, mapid_t mapping);
+void increment_pages_no(struct mmap_table* mmap_table, mapid_t mapping);
 /* Iterates through the pages mapped in entry, removes them from the 
    SPT table/page table and removes/frees the entry in the mmap_table. 
    Performs write backs to file if page is dirty. */
