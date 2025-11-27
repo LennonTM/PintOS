@@ -453,21 +453,22 @@ static mapid_t mmap (int fd, void *addr) {
   if (fd < USER_FIRST_FD) {
     return MAP_FAILED;
   }
+  struct fd_table *fd_table = &thread_current()->process->fd_table;
+  struct file* og_file = get_file (fd_table, fd);
+  if (og_file == NULL) {
+    return MAP_FAILED;
+  }
   int length = filesize(fd);
   if (length == 0 || 
-      (uintptr_t)addr % WORD_BYTES != 0 || 
+      (uintptr_t)addr % PGSIZE != 0 || 
       (uintptr_t)addr == 0) 
   {
     return MAP_FAILED;
   }
 
-  struct fd_table *fd_table = &thread_current()->process->fd_table;
   struct hash *spt = &thread_current()->process->spt;
   struct mmap_table* mmap_table = &thread_current()->process->mmap_table;
-  struct file* file = file_reopen(get_file (fd_table, fd));
-  if (file == NULL) {
-      return MAP_FAILED;
-  }
+  struct file* file = file_reopen(og_file);
 
   uint32_t *pagedir = thread_current()->process->pagedir;
 
