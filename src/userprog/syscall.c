@@ -431,11 +431,9 @@ handle_close (void *esp, uint32_t *eax UNUSED) {
    yet been unmapped.*/
 static void munmap (mapid_t mapping) {
   struct mmap_table* mmap_table = &thread_current()->process->mmap_table;
-  if (
-    get_entry(mmap_table, mapping) != NULL &&
-    mapping >= FIRST_MAP_ID
-  ) {
-    free_entry(mmap_table, mapping);
+  struct mmap_entry* entry = get_entry(mmap_table, mapping);
+  if (entry != NULL) {
+    free_entry(entry);
   }
 }
 
@@ -466,7 +464,7 @@ static mapid_t mmap (int fd, void *addr) {
   struct fd_table *fd_table = &thread_current()->process->fd_table;
   struct hash *spt = &thread_current()->process->spt;
   struct mmap_table* mmap_table = &thread_current()->process->mmap_table;
-  struct file* file = get_file (fd_table, fd);
+  struct file* file = file_reopen(get_file (fd_table, fd));
   if (file == NULL) {
       return MAP_FAILED;
   }
@@ -488,7 +486,7 @@ static mapid_t mmap (int fd, void *addr) {
       return MAP_FAILED;
     }
     if (map_id == MAP_FAILED) {
-      map_id = new_entry(mmap_table, addr, fd);
+      map_id = new_entry(mmap_table, addr, file);
     }
     else {
       extend(mmap_table, map_id);
