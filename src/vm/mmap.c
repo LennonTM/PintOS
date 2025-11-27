@@ -18,9 +18,10 @@ void free_mmap_table(struct mmap_table* mmap_table) {
     struct list_elem *e = list_begin (list); 
     while (e != list_end (list)) {
         struct mmap_entry *entry = list_entry (e, struct mmap_entry, elem);
+        ASSERT (entry != NULL);
         /* Remove list_elem from the list before freeing the entry */
         e = list_remove (e);
-        free_entry(mmap_table, entry->id);
+        free_entry(entry);
     }
 }
 
@@ -54,14 +55,18 @@ struct mmap_entry* get_entry(struct mmap_table* mmap_table, mapid_t mapping) {
 }
 
 /* Creates new entry in table with a single page*/
-mapid_t new_entry (struct mmap_table* mmap_table, void* upage, int fd) {
+mapid_t new_entry (
+    struct mmap_table* mmap_table, 
+    void* upage, 
+    struct file* file
+) {
     struct list* list = &mmap_table->list;
     int id = get_next_mapid (mmap_table);
     struct mmap_entry* entry = malloc (sizeof(struct mmap_entry));
     entry->id = id;
     entry->no_pages = 1;
     entry->upage = upage;
-    entry->fd = fd;
+    entry->file = file;
     list_push_back(list ,&entry->elem);
     return id;
 }
@@ -71,17 +76,13 @@ void extend(struct mmap_table* mmap_table, mapid_t mapping) {
     struct mmap_entry * entry = get_entry(mmap_table, mapping);
     entry->no_pages++;   
 }
-/* Iterates through the pages mapped at mapping, removes them from the 
+/* Iterates through the pages mapped in entry, removes them from the 
    SPT table/page table and removes/frees the entry in the mmap_table. 
    Performs write backs to file if page is dirty. */
-void free_entry(struct mmap_table* mmap_table, mapid_t mapping) {
-    struct mmap_entry * entry = get_entry(mmap_table, mapping);
+void free_entry(struct mmap_entry * entry) {
     ASSERT(entry != NULL);
 
     uint32_t *pagedir = thread_current()->process->pagedir;
-    struct fd_table* fd_table = &thread_current()->process->fd_table;
-    struct file* file = get_file(fd_table, entry->fd);
-    ASSERT (file != NULL);
     void* upage = entry->upage;
     
     int offset = 0;
@@ -94,7 +95,7 @@ void free_entry(struct mmap_table* mmap_table, mapid_t mapping) {
             continue;
         }
         if (pagedir_is_dirty(pagedir, upage)) {
-            file_write_at(file, upage, PGSIZE, offset);
+            file_write_at(entry->file, upage, PGSIZE, offset);
         }            
         pagedir_clear_page(pagedir, upage);
         upage += PGSIZE;
