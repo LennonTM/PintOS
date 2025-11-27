@@ -64,7 +64,7 @@ mapid_t new_entry (
     int id = get_next_mapid (mmap_table);
     struct mmap_entry* entry = malloc (sizeof(struct mmap_entry));
     entry->id = id;
-    entry->no_pages = 1;
+    entry->no_pages = 0;
     entry->upage = upage;
     entry->file = file;
     list_push_back(list ,&entry->elem);
