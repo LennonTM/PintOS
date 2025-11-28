@@ -154,41 +154,45 @@ page_fault (struct intr_frame *f)
 
   struct process *proc = thread_current()->process; 
   void *fault_page = pg_round_down(fault_addr);
-
-  struct spt_entry *spt_entry = spt_get_entry (&proc->spt, fault_page);
-  if (spt_entry != NULL) {
-    switch (spt_entry->status) {
-      case FRAME:
-        PANIC("IF IT'S IN THE FRAME WHY ARE WE PAGE FAULTING???");
-      case SWAP:
-        PANIC("UNIMPLEMENTED: SWAP IN PAGE FAULT");
-      case FILE:
-        /* Page is to be lazy-loaded from a file */
-        spt_load_file_page (spt_entry);
-        break;
-      case ZERO:
-        PANIC("UNIMPLEMENTED: SWAP IN PAGE FAULT");
+  
+  if (not_present) {
+    struct spt_entry *spt_entry = spt_get_entry (&proc->spt, fault_page);
+    if (spt_entry != NULL) {
+      switch (spt_entry->status) {
+        case FRAME:
+          PANIC("IF IT'S IN THE FRAME WHY ARE WE PAGE FAULTING???");
+        case SWAP:
+          PANIC("UNIMPLEMENTED: SWAP IN PAGE FAULT");
+        case FILE:
+          /* Page is to be lazy-loaded from a file */
+          spt_load_file_page (spt_entry);
+          break;
+        case ZERO:
+          PANIC("UNIMPLEMENTED: SWAP IN PAGE FAULT");
+        case SHARED:
+          PANIC("Shared page shoudld always be loaded");
+      }
+      return;
     }
-    return;
-  }
 
-  /* Check for stack growth */
-  void *esp = user ? f->esp : proc->esp;
-  if (is_user_vaddr (fault_addr) 
-      && fault_addr >= esp - STACK_GROWTH_THRESHOLD) 
-  {
-    /* Kernel can attempt user stack access only when
-       accessing user memory in a system call, so
-       recover_flag must have been set */
-    ASSERT (user || proc->recover_flag);
-    /* Verify that the stack is less than STACK_GROWTH_MAX_SIZE */
-    if (fault_addr < PHYS_BASE - STACK_GROWTH_MAX_SIZE)
-      process_exit (PROC_ERR);
-    /* Load the page */
-    if (!load_page_zeroing(fault_page, true)) {
-      process_exit (PROC_ERR);
+    /* Check for stack growth */
+    void *esp = user ? f->esp : proc->esp;
+    if (is_user_vaddr (fault_addr) 
+        && fault_addr >= esp - STACK_GROWTH_THRESHOLD) 
+    {
+      /* Kernel can attempt user stack access only when
+        accessing user memory in a system call, so
+        recover_flag must have been set */
+      ASSERT (user || proc->recover_flag);
+      /* Verify that the stack is less than STACK_GROWTH_MAX_SIZE */
+      if (fault_addr < PHYS_BASE - STACK_GROWTH_MAX_SIZE)
+        process_exit (PROC_ERR);
+      /* Load the page */
+      if (!load_page_zeroing(fault_page, true)) {
+        process_exit (PROC_ERR);
+      }
+      return;
     }
-    return;
   }
 
   /* Recover if the page fault is a result of
