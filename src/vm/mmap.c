@@ -92,12 +92,13 @@ void free_entry(struct mmap_entry * entry) {
            table */
         if (pagedir_get_page(pagedir, upage) == NULL) {
             remove_page(upage);
-            continue;
         }
-        if (pagedir_is_dirty(pagedir, upage)) {
-            file_write_at(entry->file, upage, PGSIZE, offset);
-        }            
-        pagedir_clear_page(pagedir, upage);
+        else {
+            if (pagedir_is_dirty(pagedir, upage)) {
+                file_write_at(entry->file, upage, PGSIZE, offset);
+            }          
+            pagedir_clear_page(pagedir, upage);
+        }  
         upage += PGSIZE;
         offset += PGSIZE;
     }
