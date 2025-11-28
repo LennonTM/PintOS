@@ -11,6 +11,9 @@
 #include "threads/malloc.h"
 #include "devices/input.h"
 #include "lib/stdio.h"
+#include "vm/page.h"
+#include "vm/mmap.h"
+#include "userprog/pagedir.h"
 
 static void syscall_handler (struct intr_frame *);
 
@@ -423,7 +426,84 @@ handle_close (void *esp, uint32_t *eax UNUSED) {
   close(fd);
 }
 
-#define TOTAL_SYSCALLS 13
+/* Unmaps the mapping designated by mapping, which must be a mapping ID 
+   returned by a previous call to mmap by the same process that has not 
+   yet been unmapped.*/
+static void munmap (mapid_t mapping) {
+  struct mmap_table* mmap_table = &thread_current()->process->mmap_table;
+  struct mmap_entry* entry = get_entry(mmap_table, mapping);
+  if (entry != NULL) {
+    free_entry(entry);
+  }
+}
+
+static void 
+handle_munmap (void* esp, uint32_t *eax UNUSED) {
+  mapid_t mapping = (mapid_t) parse_argument (&esp);
+  munmap(mapping);
+}
+
+
+/* Maps the file open as fd into the process’s virtual address space. 
+   The entire file is mapped into consecutive virtual pages starting at addr.
+*/
+static mapid_t mmap (int fd, void *addr) {
+  /* We cant memory map the stdin/stdout or negative fd */
+  if (fd < USER_FIRST_FD) {
+    return MAP_FAILED;
+  }
+
+  struct fd_table *fd_table = &thread_current()->process->fd_table;
+  struct file* og_file = get_file (fd_table, fd);
+  if (og_file == NULL) {
+    return MAP_FAILED;
+  }
+  int length = filesize(fd);
+  if (length == 0 || 
+      (uintptr_t)addr % PGSIZE != 0 || 
+      (uintptr_t)addr == 0) 
+  {
+    return MAP_FAILED;
+  }
+
+  struct hash *spt = &thread_current()->process->spt;
+  uint32_t *pagedir = thread_current()->process->pagedir;
+  /* We check for overlap and fail if so. */
+  for (int i = 0; i < length; i+=PGSIZE) {
+    if (
+      pagedir_get_page(pagedir, addr+i) != NULL || 
+      spt_get_entry(spt, addr + i) != NULL
+    ) {
+      return MAP_FAILED;
+    }
+  }
+
+  struct mmap_table* mmap_table = &thread_current()->process->mmap_table;
+  struct file* file = file_reopen(og_file);
+  int ofs = 0;
+  mapid_t map_id = new_entry(mmap_table, addr, file);
+  while (length > 0) {
+    int read_bytes = min(length, PGSIZE);
+    int zero_bytes = PGSIZE - read_bytes;
+    increment_pages_no(mmap_table, map_id);
+    /*We lazy load the page, if valid.*/
+    spt_record_file_page(spt, file, ofs, addr, read_bytes, zero_bytes, true);
+    ofs += read_bytes;
+    length -= read_bytes;
+    addr += read_bytes;
+  }
+
+  return map_id;
+}
+
+static void 
+handle_mmap (void* esp, uint32_t *eax UNUSED) {
+  int fd = (int) parse_argument(&esp);
+  void *addr = (void*) parse_argument(&esp);
+  *eax = mmap(fd, addr);
+}
+
+#define TOTAL_SYSCALLS 15
 
 static handle_syscall handlers[TOTAL_SYSCALLS] = {
   [SYS_HALT]=&handle_halt,
@@ -439,6 +519,8 @@ static handle_syscall handlers[TOTAL_SYSCALLS] = {
   [SYS_SEEK]=&handle_seek,
   [SYS_TELL]=&handle_tell,
   [SYS_CLOSE]=&handle_close,
+  [SYS_MMAP]=&handle_mmap,
+  [SYS_MUNMAP]=&handle_munmap,
 };
 
 void

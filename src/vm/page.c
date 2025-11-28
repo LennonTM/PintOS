@@ -21,10 +21,13 @@ void *aux UNUSED)
 {
   const struct spt_entry *a = hash_entry (a_, struct spt_entry, elem);
   const struct spt_entry *b = hash_entry (b_, struct spt_entry, elem);
-  return a->upage < b->upage;
+  return a->upage < b->upage;                           
 }
 
-/* Records data in SPT about a page to be lazy-loaded from a file */
+/* Records the file at page starting at upage in spt. ofs is the offset within
+   the file. page_read_bytes is the number of bytes that can be read of the
+   file in the page, page_zero_bytes is the rest of the bytes in the page 
+   which are zero.*/
 void
 spt_record_file_page (struct hash *spt, struct file *file, off_t ofs,
                       uint8_t *upage, uint32_t page_read_bytes,
@@ -61,16 +64,11 @@ spt_remove_entry (struct hash *spt, struct spt_entry *entry) {
    NULL if not entry exists */
 struct spt_entry *
 spt_get_entry (struct hash *spt, void *upage) {
-  struct spt_entry key_entry = (struct spt_entry) {
-    .upage = upage
-  };
-  struct hash_elem *spt_entry_elem = hash_find (spt, &key_entry.elem);
-  if (spt_entry_elem == NULL) {
-    return NULL;
-  }
-  struct spt_entry *spt_entry =
-    hash_entry (spt_entry_elem, struct spt_entry, elem);
-  return spt_entry;
+  struct spt_entry p;
+  struct hash_elem *e;
+  p.upage = upage;
+  e = hash_find (spt, &p.elem);
+  return e != NULL ? hash_entry (e, struct spt_entry, elem) : NULL;
 }
 
 /* Helper function for destory_spt, destroys memory for the entry */
@@ -154,4 +152,13 @@ spt_turn_entry_shared (struct spt_entry *spt_entry) {
   ASSERT (spt_entry->status == FILE);
   spt_entry->status = SHARED;
 }
+/* Removes the page at address upage in the spt table. */
+void
+spt_remove_page (void* upage) {
+  struct hash *spt = &thread_current()->process->spt;
+  struct spt_entry *entry = spt_get_entry (spt, upage);
+  hash_delete (spt, &entry->elem);
+}
+
+
 

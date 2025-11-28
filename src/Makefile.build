@@ -67,6 +67,7 @@ vm_SRC = devices/swap.c		# Swap block manager.
 vm_SRC += vm/frame.c			# Frame table.
 vm_SRC += vm/page.c			# Supplementary page table.
 vm_SRC += vm/shared.c       # Table of shared read only executable file pages
+vm_SRC += vm/mmap.c         # Memory Mapping
 
 # Filesystem code.
 filesys_SRC  = filesys/filesys.c	# Filesystem core.

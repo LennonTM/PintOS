@@ -80,4 +80,6 @@ void spt_destroy (struct hash *spt);
 bool spt_load_file_page (struct spt_entry* spt_entry);
 void spt_share_entry (struct spt_entry *spt_entry, struct list *shared_list);
 void spt_turn_entry_shared (struct spt_entry *spt_entry);
+void spt_remove_page (void* upage);
+
 #endif 
