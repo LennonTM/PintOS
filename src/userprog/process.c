@@ -870,3 +870,10 @@ install_page (void *upage, void *kpage, bool writable)
   return (pagedir_get_page (cur->pagedir, upage) == NULL
           && pagedir_set_page (cur->pagedir, upage, kpage, writable));
 }
+
+/* Marks UPAGE not present in current process's pagedir */
+void
+uninstall_page (void *upage) {
+  pagedir_clear_page (thread_current ()->process->pagedir, upage);
+}
+

@@ -78,7 +78,18 @@ static void
 spt_destroy_entry (struct hash_elem *e, void *aux UNUSED)
 {
   struct spt_entry *spt_entry = hash_entry (e, struct spt_entry, elem);
-  
+  switch (spt_entry->status) {
+    case SHARED:
+      unlink_shared_entry (spt_entry->aux.shared.file,
+                           spt_entry->aux.shared.ofs,
+                           spt_entry);
+      break;
+    case FILE:
+    case FRAME:
+    case ZERO:
+    case SWAP:
+      break;
+  }
   free (spt_entry); 
 }
 
@@ -95,41 +106,51 @@ spt_load_file_page (struct spt_entry* spt_entry) {
   off_t offset           = spt_entry->aux.file.ofs;
   size_t page_read_bytes = spt_entry->aux.file.page_read_bytes;
   size_t page_zero_bytes = spt_entry->aux.file.page_zero_bytes;
-  struct shared_entry *shared_entry;
-  /* Check if the page has been loaded by other process */
-  shared_entry = get_shared_entry (file, offset);
-  if (shared_entry != NULL) {
-    ASSERT (!writable);
-    /* Link the user page to existing frame */
-    uint8_t *kpage = shared_entry->kpage;
-    spt_share_entry (spt_entry, &shared_entry->spt_ptrs);
-    return frame_install_page (spt_entry->upage, kpage, writable);
-  }
-  
-  /* Load a new page */
-  uint8_t *kpage = load_page_from_file (file, offset, upage, page_read_bytes,
-                                        page_zero_bytes, writable);
-  if (kpage == NULL) {
-    return false;
-  }
-  /* Store information about it in a shared table */
-  if (!writable) {
-    shared_entry = create_shared_entry (file, offset, kpage, page_read_bytes);
-    spt_share_entry (spt_entry, &shared_entry->spt_ptrs);
-  }
-  else {
+
+  if (writable) {
+    uint8_t *kpage = load_page_from_file (file, offset, upage, page_read_bytes,
+                                          page_zero_bytes, writable);
+    if (kpage == NULL) {
+      return false;
+    }
     /* TODO: Remove for now, for eviction probably need
      * to transition to another state, e.g., FILE_LOADED */
     spt_remove_entry (&thread_current()->process->spt, spt_entry);
+    return true;
   }
+  /* Link the spt_entry to the shared_entry */
+  struct shared_entry *shared_entry =
+    link_to_shared_entry (file, offset, spt_entry);
+  if (shared_entry == NULL) {
+    return false;
+  }
+  /* Atomically load the page */
+  lock_acquire (&shared_entry->lock);
+  uint8_t *kpage = shared_entry->kpage;
+  /* Load new page */
+  if (kpage == NULL) {
+    kpage = load_page_from_file (file, offset, upage, page_read_bytes,
+                                 page_zero_bytes, writable);
+    /* If load failed */
+    if (kpage == NULL) {
+      lock_release (&shared_entry->lock);
+      return false;
+    }
+    shared_entry->kpage = kpage;
+  }
+  else {
+    /* Install an existing page */
+    frame_install_page (spt_entry->upage, kpage, writable);
+  }
+  lock_release (&shared_entry->lock);
 
   return true;
 }
 
-/* Turn entry into shared one, and add it on a corresponding list */
+/* Turn FILE entry into SHARED enrtry */
 void
-spt_share_entry (struct spt_entry *spt_entry, struct list *shared_list) {
+spt_turn_entry_shared (struct spt_entry *spt_entry) {
+  ASSERT (spt_entry->status == FILE);
   spt_entry->status = SHARED;
-  list_push_front (shared_list, &spt_entry->aux.shared.elem);
 }
 
