@@ -71,6 +71,7 @@ create_shared_entry (struct file *file, off_t offset)
   }
   shared_entry->file = file;
   shared_entry->offset = offset;
+  shared_entry->kpage = NULL;
   list_init (&shared_entry->spt_ptrs);
   lock_init (&shared_entry->lock);
 
@@ -112,12 +113,12 @@ void
 unlink_shared_entry (struct file *file, off_t offset,
                      struct spt_entry *spt_entry)
 {
-  struct shared_entry *shared_entry = get_shared_entry (file, offset);
-  ASSERT (shared_entry != NULL);
   /* Unlink while holding a shared table lock to ensure that
      no other process links to the entry for given {file, offset}
      This allows to  */
   lock_acquire (&shared_table_lock);
+  struct shared_entry *shared_entry = get_shared_entry (file, offset);
+  ASSERT (shared_entry != NULL);
   list_remove (&spt_entry->aux.shared.elem);
   if (list_empty(&shared_entry->spt_ptrs)) {
     struct hash_elem *removed_elem = 

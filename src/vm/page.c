@@ -134,6 +134,7 @@ spt_load_file_page (struct spt_entry* spt_entry) {
     /* If load failed */
     if (kpage == NULL) {
       lock_release (&shared_entry->lock);
+      unlink_shared_entry (file, offset, spt_entry);
       return false;
     }
     shared_entry->kpage = kpage;
