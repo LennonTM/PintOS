@@ -433,6 +433,8 @@ process_exit (int exit_code)
   if (cur != NULL)
     {
       
+      spt_destroy (&cur->spt);
+
       if (cur->executable_file != NULL) {
         file_close(cur->executable_file);
       }
@@ -441,7 +443,6 @@ process_exit (int exit_code)
 
       free_fd_table (&cur->fd_table);
       
-      spt_destroy (&cur->spt);
       /* Destroy the current process's page directory and switch back
          to the kernel-only page directory. */
       pd = cur->pagedir;
