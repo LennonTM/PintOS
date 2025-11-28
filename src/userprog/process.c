@@ -24,6 +24,7 @@
 #include "devices/timer.h"
 #include "vm/frame.h"
 #include "vm/page.h"
+#include "vm/shared.h"
 
 static bool process_init (struct thread *t);
 static thread_func start_process NO_RETURN;
@@ -436,6 +437,8 @@ process_exit (int exit_code)
   if (cur != NULL)
     {
       
+      spt_destroy (&cur->spt);
+
       if (cur->executable_file != NULL) {
         file_close(cur->executable_file);
       }
@@ -444,7 +447,6 @@ process_exit (int exit_code)
 
       free_fd_table (&cur->fd_table);
       
-      destroy_spt (&cur->spt);
       /* Destroy the current process's page directory and switch back
          to the kernel-only page directory. */
       pd = cur->pagedir;
@@ -681,8 +683,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
 /* load() helpers. */
 
-static bool install_page (void *upage, void *kpage, bool writable);
-
 /* Checks whether PHDR describes a valid, loadable segment in
    FILE and returns true if so, false otherwise. */
 static bool
@@ -740,9 +740,9 @@ validate_segment (const struct Elf32_Phdr *phdr, struct file *file)
    A page initialized by this function must be writable by the
    user process if WRITABLE is true, read-only otherwise.
 
-   Return true if successful, false if a memory allocation error
-   or disk read error occurs. */
-bool
+   If successful, returns kernel virtual address of the frame assigned,
+   If a memory allocation error or disk read error occurs, return NULL. */
+uint8_t *
 load_page_from_file (struct file *file, off_t ofs, uint8_t *upage,
                      uint32_t page_read_bytes, uint32_t page_zero_bytes,
                      bool writable)
@@ -750,25 +750,24 @@ load_page_from_file (struct file *file, off_t ofs, uint8_t *upage,
   /* Get a new page of memory. */
   uint8_t *kpage = frame_alloc (PAL_USER);
   if (kpage == NULL){
-    return false;
+    return NULL;
   }
 
   /* Add the page to the process's address space. */
-  if (!install_page (upage, kpage, writable)) 
+  if (!frame_install_page (upage, kpage, writable)) 
   {
     frame_free (kpage);
-    return false; 
+    return NULL; 
   }
-
-  frame_install_page (upage, kpage);
 
   /* Load data into the page. */
   file_seek (file, ofs);
   if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes){
-    return false; 
+    return NULL; 
   }
   memset (kpage + page_read_bytes, 0, page_zero_bytes);
-  return true;
+
+  return kpage;
 }
 
 /* Loads a page at upage and fills it with zeros. Installs it into the page 
@@ -780,12 +779,10 @@ load_page_zeroing (uint8_t *upage, bool writable)
   if (kpage == NULL)
     return false;
 
-  if (!install_page(upage, kpage, writable)) {
+  if (!frame_install_page(upage, kpage, writable)) {
     frame_free(kpage);
     return false;
   }
-
-  frame_install_page (upage, kpage);
 
   return true;
 }
@@ -824,7 +821,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 
       /* Record data about a lazy-loaded page in SPT */
       struct hash *spt = &thread_current()->process->spt;
-      record_file_page (spt, file, ofs, upage,
+      spt_record_file_page (spt, file, ofs, upage,
                        page_read_bytes, page_zero_bytes,
                        writable);
 
@@ -849,10 +846,9 @@ setup_stack (void **esp)
   if (kpage != NULL) 
     {
       void *upage = ((uint8_t *) PHYS_BASE) - PGSIZE;
-      success = install_page (upage, kpage, true);
+      success = frame_install_page (upage, kpage, true);
       if (success) {
         *esp = PHYS_BASE;
-        frame_install_page(upage, kpage);
       }
       else
         frame_free (kpage);
@@ -869,7 +865,7 @@ setup_stack (void **esp)
    with palloc_get_page().
    Returns true on success, false if UPAGE is already mapped or
    if memory allocation fails. */
-static bool
+bool
 install_page (void *upage, void *kpage, bool writable)
 {
   struct process *cur = thread_current ()->process;
@@ -879,3 +875,10 @@ install_page (void *upage, void *kpage, bool writable)
   return (pagedir_get_page (cur->pagedir, upage) == NULL
           && pagedir_set_page (cur->pagedir, upage, kpage, writable));
 }
+
+/* Marks UPAGE not present in current process's pagedir */
+void
+uninstall_page (void *upage) {
+  pagedir_clear_page (thread_current ()->process->pagedir, upage);
+}
+

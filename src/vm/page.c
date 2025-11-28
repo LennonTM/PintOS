@@ -1,4 +1,6 @@
 #include "vm/page.h"
+#include "vm/shared.h"
+#include "vm/frame.h"
 #include "lib/debug.h"
 #include "userprog/process.h"
 #include "filesys/file.h"
@@ -24,9 +26,9 @@ void *aux UNUSED)
 
 /* Records data in SPT about a page to be lazy-loaded from a file */
 void
-record_file_page (struct hash *spt, struct file *file, off_t ofs,
-                  uint8_t *upage, uint32_t page_read_bytes,
-                  uint32_t page_zero_bytes, bool writable)
+spt_record_file_page (struct hash *spt, struct file *file, off_t ofs,
+                      uint8_t *upage, uint32_t page_read_bytes,
+                      uint32_t page_zero_bytes, bool writable)
 {
   struct spt_entry *entry = 
     (struct spt_entry *) malloc (sizeof (struct spt_entry));
@@ -48,7 +50,7 @@ record_file_page (struct hash *spt, struct file *file, off_t ofs,
 /* Removes provided entry from the SPT
    returns true if entry was removed successfully */
 bool 
-remove_entry (struct hash *spt, struct spt_entry *entry) {
+spt_remove_entry (struct hash *spt, struct spt_entry *entry) {
   struct hash_elem *removed_elem = hash_delete (spt, &entry->elem);
   free (entry);
   return removed_elem != NULL;
@@ -58,7 +60,7 @@ remove_entry (struct hash *spt, struct spt_entry *entry) {
    corresponding to provided user vaddr of the page 
    NULL if not entry exists */
 struct spt_entry *
-get_entry (struct hash *spt, void *upage) {
+spt_get_entry (struct hash *spt, void *upage) {
   struct spt_entry key_entry = (struct spt_entry) {
     .upage = upage
   };
@@ -73,14 +75,83 @@ get_entry (struct hash *spt, void *upage) {
 
 /* Helper function for destory_spt, destroys memory for the entry */
 static void
-destroy_spt_entry (struct hash_elem *e, void *aux UNUSED)
+spt_destroy_entry (struct hash_elem *e, void *aux UNUSED)
 {
   struct spt_entry *spt_entry = hash_entry (e, struct spt_entry, elem);
-  
+  switch (spt_entry->status) {
+    case SHARED:
+      unlink_shared_entry (spt_entry->aux.shared.file,
+                           spt_entry->aux.shared.ofs,
+                           spt_entry);
+      break;
+    case FILE:
+    case FRAME:
+    case ZERO:
+    case SWAP:
+      break;
+  }
   free (spt_entry); 
 }
 
 void
-destroy_spt (struct hash *spt) {
-  hash_destroy (spt, destroy_spt_entry);
+spt_destroy (struct hash *spt) {
+  hash_destroy (spt, spt_destroy_entry);
 }
+
+bool
+spt_load_file_page (struct spt_entry* spt_entry) {
+  void *upage            = spt_entry->upage;
+  bool writable          = spt_entry->writable;
+  struct file *file      = spt_entry->aux.file.file;
+  off_t offset           = spt_entry->aux.file.ofs;
+  size_t page_read_bytes = spt_entry->aux.file.page_read_bytes;
+  size_t page_zero_bytes = spt_entry->aux.file.page_zero_bytes;
+
+  if (writable) {
+    uint8_t *kpage = load_page_from_file (file, offset, upage, page_read_bytes,
+                                          page_zero_bytes, writable);
+    if (kpage == NULL) {
+      return false;
+    }
+    /* TODO: Remove for now, for eviction probably need
+     * to transition to another state, e.g., FILE_LOADED */
+    spt_remove_entry (&thread_current()->process->spt, spt_entry);
+    return true;
+  }
+  /* Link the spt_entry to the shared_entry */
+  struct shared_entry *shared_entry =
+    link_to_shared_entry (file, offset, spt_entry);
+  if (shared_entry == NULL) {
+    return false;
+  }
+  /* Atomically load the page */
+  lock_acquire (&shared_entry->lock);
+  uint8_t *kpage = shared_entry->kpage;
+  /* Load new page */
+  if (kpage == NULL) {
+    kpage = load_page_from_file (file, offset, upage, page_read_bytes,
+                                 page_zero_bytes, writable);
+    /* If load failed */
+    if (kpage == NULL) {
+      lock_release (&shared_entry->lock);
+      unlink_shared_entry (file, offset, spt_entry);
+      return false;
+    }
+    shared_entry->kpage = kpage;
+  }
+  else {
+    /* Install an existing page */
+    frame_install_page (spt_entry->upage, kpage, writable);
+  }
+  lock_release (&shared_entry->lock);
+
+  return true;
+}
+
+/* Turn FILE entry into SHARED enrtry */
+void
+spt_turn_entry_shared (struct spt_entry *spt_entry) {
+  ASSERT (spt_entry->status == FILE);
+  spt_entry->status = SHARED;
+}
+

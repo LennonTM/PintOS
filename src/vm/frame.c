@@ -48,11 +48,17 @@ frame_free (void *kpage) {
     palloc_free_page(kpage);
 }
 
-/* Sets owner and upage members of an allocated kpage */
-void
-frame_install_page(void *upage, void *kpage) {
+/* Maps user virtual address UPAGE to a frame at KPAGE
+   by calling install_page
+   Sets owner and upage members of a frame corresponding to kpage */
+bool
+frame_install_page(void *upage, void *kpage, bool writable) {
+    if (!install_page (upage, kpage, writable)) {
+      return false;
+    }
     /* Assert that this frame has just been allocated */
     size_t frame_index = get_page_index(kpage);
     frame_table[frame_index].owner = thread_current()->process;
     frame_table[frame_index].upage = upage;
+    return true;
 }
