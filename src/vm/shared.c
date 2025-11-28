@@ -5,6 +5,7 @@
 #include "filesys/off_t.h"
 #include "lib/kernel/hash.h"
 #include "threads/malloc.h"
+#include "userprog/process.h"
 
 /* frame_table_entry is an array of all frame_table entries */
 static struct hash shared_table;
@@ -113,6 +114,7 @@ void
 unlink_shared_entry (struct file *file, off_t offset,
                      struct spt_entry *spt_entry)
 {
+  ASSERT (spt_entry->status == SHARED);
   /* Unlink while holding a shared table lock to ensure that
      no other process links to the entry for given {file, offset}
      This allows to  */
@@ -121,10 +123,16 @@ unlink_shared_entry (struct file *file, off_t offset,
   ASSERT (shared_entry != NULL);
   list_remove (&spt_entry->aux.shared.elem);
   if (list_empty(&shared_entry->spt_ptrs)) {
+    /* Destroy the entry if the process was the last one sharing it */
     struct hash_elem *removed_elem = 
       hash_delete (&shared_table, &shared_entry->elem);
     ASSERT (removed_elem != NULL);
     free (shared_entry);
+  }
+  else {
+    /* If other processes still share the frame
+       Uninstall the page pointing to it */
+    uninstall_page (spt_entry->upage);
   }
   lock_release (&shared_table_lock);
 }
