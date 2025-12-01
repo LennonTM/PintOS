@@ -47,6 +47,7 @@ frame_evict (void) {
     struct frame_table_entry *frame = &frame_table[eviction_search_index];
     void *frame_addr = (void *)((uintptr_t)eviction_search_index * PGSIZE 
                         + (uintptr_t)palloc_get_user_pool_base());
+    eviction_search_index = (eviction_search_index + 1) % user_pages;
     if (frame->pinned) {
       continue;
     }
@@ -66,7 +67,6 @@ frame_evict (void) {
         accessed = true;
       }
     }
-    eviction_search_index = (eviction_search_index + 1) % user_pages;
 
     if (!accessed) {
       victim = frame;
