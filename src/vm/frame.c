@@ -68,7 +68,7 @@ frame_evict (void) {
     }
     eviction_search_index = (eviction_search_index + 1) % user_pages;
 
-    if (accessed) {
+    if (!accessed) {
       victim = frame;
       kpage = frame_addr;
       break;
