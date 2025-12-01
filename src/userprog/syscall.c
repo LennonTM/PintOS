@@ -431,9 +431,9 @@ handle_close (void *esp, uint32_t *eax UNUSED) {
    yet been unmapped.*/
 static void munmap (mapid_t mapping) {
   struct mmap_table* mmap_table = &thread_current()->process->mmap_table;
-  struct mmap_entry* entry = get_entry(mmap_table, mapping);
+  struct mmap_entry* entry = mmap_get_entry(mmap_table, mapping);
   if (entry != NULL) {
-    free_entry(entry);
+    mmap_free_entry(entry);
   }
 }
 
@@ -481,11 +481,11 @@ static mapid_t mmap (int fd, void *addr) {
   struct mmap_table* mmap_table = &thread_current()->process->mmap_table;
   struct file* file = file_reopen(og_file);
   int ofs = 0;
-  mapid_t map_id = new_entry(mmap_table, addr, file);
+  mapid_t map_id = mmap_new_entry(mmap_table, addr, file);
   while (length > 0) {
     int read_bytes = min(length, PGSIZE);
     int zero_bytes = PGSIZE - read_bytes;
-    increment_pages_no(mmap_table, map_id);
+    mmap_increment_pages_no(mmap_table, map_id);
     /*We lazy load the page, if valid.*/
     spt_record_file_page(spt, file, ofs, addr, read_bytes, zero_bytes, true);
     ofs += read_bytes;
