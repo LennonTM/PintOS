@@ -30,7 +30,7 @@ frame_table_init (void) {
   /* Set up frame table */
   frame_table = malloc(sizeof(struct frame_table_entry) * user_pages);
   if (frame_table == NULL) 
-      PANIC("Failed to malloc frame table!");
+    PANIC("Failed to malloc frame table!");
 
   lock_init(&frame_lock);
 }
@@ -44,52 +44,80 @@ frame_evict (void) {
 
   /* We loop through all frames until a 'victim' is found */
   while (true) {
-    struct frame_table_entry *e = &frame_table[eviction_search_index];
+    struct frame_table_entry *frame = &frame_table[eviction_search_index];
     void *frame_addr = (void *)((uintptr_t)eviction_search_index * PGSIZE 
                         + (uintptr_t)palloc_get_user_pool_base());
-    
-    if (!e->pinned && e->owner != NULL) {
-      /* We check if the page has been used recently by checking the hardware
-      'accessed' bit. If it is 1, we set it to 0. If it is 0, that means the
-      page has not been accessed since our last pass. We choose this as our victim. */
-      if (pagedir_is_accessed(e->owner->pagedir, e->upage)) {
-        pagedir_set_accessed(e->owner->pagedir, e->upage, false);
-      } else {
-        victim = e;
-        kpage = frame_addr;
-        break;
+    if (frame->pinned) {
+      continue;
+    }
+    bool accessed = false;
+    ASSERT (!list_empty (&frame->owners));
+    for (struct list_elem *e = list_begin (&frame->owners);
+         e != list_end (&frame->owners);
+         e = list_next (e))
+    {
+      struct frame_owner *owner = list_entry (e, struct frame_owner, elem);
+      /* Check accessed bit of the pte corresponding to owner->upage
+         which maps to current frame. Unset accessed bit of pte
+         and choose the frame as a victim if all pages referring to it
+         have not been accessed (or bits were unset by previous pass) */
+      if (pagedir_is_accessed(owner->process->pagedir, owner->upage)) {
+        pagedir_set_accessed(owner->process->pagedir, owner->upage, false);
+        accessed = true;
       }
+    }
+    if (accessed) {
+      victim = frame;
+      kpage = frame_addr;
     }
 
     eviction_search_index = (eviction_search_index + 1) % user_pages;
   }
 
   ASSERT(victim != NULL);
-  ASSERT(victim->owner != NULL);
 
-  struct spt_entry *spte = spt_get_entry(&victim->owner->spt, victim->upage);
-  ASSERT(spte != NULL);
+  for (struct list_elem *e = list_begin (&victim->owners);
+       e != list_end (&victim->owners);
+       e = list_next (e))
+  {
+    struct frame_owner *owner = list_entry (e, struct frame_owner, elem);
+    struct spt_entry *spt_entry =
+      spt_get_entry(&owner->process->spt, owner->upage);
 
-  bool is_dirty = pagedir_is_dirty(victim->owner->pagedir, victim->upage);
+    bool is_dirty = pagedir_is_dirty(owner->process->pagedir, owner->upage);
 
-  /* If page is dirty, we write it to swap to save the data */
-  if (spte->status != FILE || is_dirty) {
-    spte->status = SWAP;
+    if (spt_entry != NULL) {
+      switch (spt_entry->status) {
+        case FILE:
+          /* If a file page is dirty, write it to the file */
+          if (is_dirty) {
+            /* If file is denied writes, then file_write will not
+              modify the file, which is a desired behaviour */
+            struct file_aux *f = &spt_entry->aux.file;
+            file_write (f->file, spt_entry->upage, f->ofs);
+          }
+          break;
+        case SWAP:
+          PANIC ("SWAP page must not be mapped");
+        case ZERO:
+        case FRAME:
+          PANIC ("Unimplemented spte status");
+      }
+    }
+    else if (is_dirty) {
+      /* Otherwise, the page is a stack page */
+      size_t swap_index = swap_out(kpage);
+      spt_record_swap_page (&owner->process->spt, owner->upage, 
+                            true, swap_index);
+    }
 
-    size_t slot_index = swap_out(kpage);
-    memset(&spte->aux, 0, sizeof(spte->aux));
-
-    spte->aux.swap.index = slot_index;
+    /* The next time a process touches the address, it will trigger a
+       page fault, so the page can be loaded again */
+    pagedir_clear_page(owner->process->pagedir, owner->upage);
   }
 
-  /* The next time a process touches the address, it will trigger a
-  page fault, so the page can be loaded again */
-  pagedir_clear_page(victim->owner->pagedir, victim->upage);
-
   /* Reset the frame table entry */
-  victim->owner = NULL;
-  victim->upage = NULL;
-  victim->pinned = false;
+  list_init (&victim->owners);
 
   return kpage;
 }
@@ -98,8 +126,8 @@ frame_evict (void) {
    the corresponding frame_table_entry will be used after */
 void *
 frame_alloc (enum palloc_flags flags) {
-  /* Kernel allocations bypass the frame table */
-  if ((flags & PAL_USER) == 0) return palloc_get_page(flags);
+  /* Frame table is maintained only for user frames */
+  ASSERT (flags & PAL_USER);
 
   bool lock_held = lock_held_by_current_thread(&frame_lock);
 
@@ -125,12 +153,10 @@ frame_alloc (enum palloc_flags flags) {
   
   size_t frame_index = get_page_index(kpage);
   ASSERT(frame_index < get_user_pages());
-  frame_table[frame_index] = (struct frame_table_entry) {
-    .owner = NULL,
-    .upage = NULL,
-    .pinned = NULL,
-    .accessed = NULL,
-  };
+
+  struct frame_table_entry *frame = &frame_table[frame_index];
+  frame->pinned = false;
+  list_init (&frame->owners);
 
   if (!lock_held) lock_release(&frame_lock);
   return kpage;   
@@ -140,6 +166,7 @@ frame_alloc (enum palloc_flags flags) {
    the corresponding frame_table_entry will be unused after */
 void
 frame_free (void *kpage) {
+  /* TODO: verify that owners are unaffected */
   palloc_free_page(kpage);
 }
 
@@ -148,12 +175,20 @@ frame_free (void *kpage) {
    Sets owner and upage members of a frame corresponding to kpage */
 bool
 frame_install_page(void *upage, void *kpage, bool writable) {
+  /* Install the mapping in the pagedir of the process */
   if (!install_page (upage, kpage, writable)) {
     return false;
   }
-  /* Assert that this frame has just been allocated */
+  struct frame_owner *owner =
+    (struct frame_owner *) malloc (sizeof (struct frame_owner));
+  if (owner == NULL) {
+    return false;
+  }
+  owner->upage = upage;
+  owner->process = thread_current()->process;
+  /* The frame must have been allocated before any calls to install */
   size_t frame_index = get_page_index(kpage);
-  frame_table[frame_index].owner = thread_current()->process;
-  frame_table[frame_index].upage = upage;
+  struct frame_table_entry *frame = &frame_table[frame_index];
+  list_push_front (&frame->owners, &owner->elem);
   return true;
 }

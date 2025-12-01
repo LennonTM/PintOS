@@ -166,47 +166,32 @@ page_fault (struct intr_frame *f)
       lock_acquire(&frame_lock);
 
       switch (spt_entry->status) {
-        case FRAME:
-          /* Faulting on a page in frame is usually due to the user attempting
-          to write to a read-only page */
-          if (write && !spt_entry->writable) {
-            lock_release(&frame_lock);
-            process_exit(PROC_ERR);
-          }
-
-          /* Any other fault on a present frame is a kernel bug */
-          PANIC("Page fault on present frame.");
         case SWAP:
           {
             void *kpage = frame_alloc(PAL_USER); /* Allocate a new physical frame */
-            if (kpage == NULL) {
-              PANIC("Swap in: out of frames.");
-            }
+            ASSERT (kpage != NULL);
 
-            if (!pagedir_set_page(proc->pagedir, spt_entry->upage, 
-                                  kpage, spt_entry->writable))
+            if (!frame_install_page(spt_entry->upage,
+                                    kpage,
+                                    spt_entry->writable))
             {
               frame_free(kpage);
+              /* TODO: Kill process, not the OS */
               PANIC("Swap in: Install page failed.");
             }
-
-            frame_install_page(spt_entry->upage, kpage, spt_entry->writable);
-            swap_in(kpage,spt_entry->aux.swap.index); /* Read data from swap disk into RAM*/
-
-            spt_entry->status = FRAME;
-            spt_entry->aux.frame.k_addr = kpage;
-            
-            lock_release(&frame_lock);
-            return;
+            /* Read data from swap space into RAM */
+            swap_in(kpage,spt_entry->aux.swap.index);
+            spt_remove_entry (&proc->spt, spt_entry);
           }
+          break;
         case FILE:
           /* Page is to be lazy-loaded from a file */
           spt_load_file_page (spt_entry);
-          spt_entry->status = FRAME;
           break;
         case ZERO:
-          PANIC("UNIMPLEMENTED: SWAP IN PAGE FAULT");
-          break;
+          PANIC("Page fault unimplemented: ZERO");
+        case FRAME:
+          PANIC("Page fault unimplemented: FRAME");
       }
       lock_release(&frame_lock);
       return;

@@ -6,6 +6,8 @@
 #include "userprog/process.h"
 #include "filesys/file.h"
 #include "threads/malloc.h"
+#include "userprog/pagedir.h"
+#include "devices/swap.h"
 
 /* Returns a hash value for spt_entry p. */
 unsigned
@@ -50,6 +52,23 @@ spt_record_file_page (struct hash *spt, struct file *file, off_t ofs,
   ASSERT (prev_elem == NULL);
 }
 
+void
+spt_record_swap_page (struct hash *spt, uint8_t *upage, bool writable,
+                      size_t swap_index) {
+  struct spt_entry *entry =
+    (struct spt_entry *) malloc (sizeof (struct spt_entry));
+  if (entry == NULL) {
+    /* Kernel ran out of memory */
+    process_exit (PROC_ERR);
+  }
+  entry->upage = upage;
+  entry->writable = writable;
+  entry->status = SWAP;
+  entry->aux.swap.index = swap_index;
+  struct hash_elem* prev_elem = hash_insert (spt, &entry->elem);
+  ASSERT (prev_elem == NULL);
+}
+
 /* Removes provided entry from the SPT
    returns true if entry was removed successfully */
 bool 
@@ -76,17 +95,25 @@ static void
 spt_destroy_entry (struct hash_elem *e, void *aux UNUSED)
 {
   struct spt_entry *spt_entry = hash_entry (e, struct spt_entry, elem);
+  bool present = pagedir_get_page (thread_current ()->process->pagedir,
+                                   spt_entry->upage) != NULL;
   switch (spt_entry->status) {
     case FILE:
-      if (!spt_entry->writable) {
+      if (!spt_entry->writable && present) {
         unlink_shared_entry (spt_entry->aux.file.file,
                              spt_entry->aux.file.ofs,
                              spt_entry);
       }
       break;
     case FRAME:
+      PANIC ("Destroy entry: unimplemented spte state FRAME");
     case ZERO:
+      PANIC ("Destroy entry: unimplemented spte state ZERO");
     case SWAP:
+      ASSERT (!present);
+      /* Only stack pages are stored in the swap space,
+         so reclaim swap space by dropping the page */
+      swap_drop (spt_entry->aux.swap.index);
       break;
   }
   free (spt_entry); 

@@ -7,18 +7,20 @@
 #include "threads/synch.h"
 
 struct frame_table_entry {
-  /* frame_table index tells us the kernel address and physical address */
-  
-  /* Pointer to owning process for eviction handling */
-  struct process *owner;
-  /* User virtual address for eviction handling */
-  void *upage;
-
+  /* List of processes and user page addresses
+     that map to this frame */
+  struct list owners;
   /* Ensure kernel doesn't page fault accessing */
   bool pinned;
+};
 
-  /* Accessed bit for eviction policy */
-  bool accessed;
+struct frame_owner {
+  /* User virtual address that maps to the frame */
+  void *upage;
+  /* Process which holds the pagedir for upage -> frame mapping */
+  struct process *process;
+  /* Element on frame_table_entry list */
+  struct list_elem elem;
 };
 
 void frame_table_init (void);

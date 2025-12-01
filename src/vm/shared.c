@@ -120,11 +120,6 @@ unlink_shared_entry (struct file *file, off_t offset,
      This allows to  */
   lock_acquire (&shared_table_lock);
   struct shared_entry *shared_entry = get_shared_entry (file, offset);
-  if (shared_entry == NULL) {
-    ASSERT (pagedir_get_page (thread_current ()->process->pagedir, spt_entry->upage) == NULL);
-    lock_release (&shared_table_lock);
-    return;
-  }
   ASSERT (shared_entry != NULL);
   list_remove (&spt_entry->aux.file.elem);
   if (list_empty(&shared_entry->spt_ptrs)) {
