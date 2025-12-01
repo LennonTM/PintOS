@@ -169,8 +169,6 @@ page_fault (struct intr_frame *f)
           break;
         case ZERO:
           PANIC("UNIMPLEMENTED: SWAP IN PAGE FAULT");
-        case SHARED:
-          PANIC("Shared page shoudld always be loaded");
       }
       return;
     }

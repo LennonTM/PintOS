@@ -6,6 +6,7 @@
 #include "lib/kernel/hash.h"
 #include "threads/malloc.h"
 #include "userprog/process.h"
+#include "userprog/pagedir.h"
 
 /* frame_table_entry is an array of all frame_table entries */
 static struct hash shared_table;
@@ -101,11 +102,10 @@ link_to_shared_entry (struct file *file, off_t offset,
       return NULL;
     }
   }
-  spt_turn_entry_shared (spt_entry);
   /* It is important to add spt_entry to a list of
      spt pointers while HOLDING SHARED TABLE LOCK,
      so that no other process destroys the entry */
-  list_push_front (&shared_entry->spt_ptrs, &spt_entry->aux.shared.elem);
+  list_push_front (&shared_entry->spt_ptrs, &spt_entry->aux.file.elem);
   lock_release (&shared_table_lock);
   return shared_entry;
 }
@@ -114,14 +114,19 @@ void
 unlink_shared_entry (struct file *file, off_t offset,
                      struct spt_entry *spt_entry)
 {
-  ASSERT (spt_entry->status == SHARED);
+  ASSERT (spt_entry->status == FILE && !spt_entry->writable);
   /* Unlink while holding a shared table lock to ensure that
      no other process links to the entry for given {file, offset}
      This allows to  */
   lock_acquire (&shared_table_lock);
   struct shared_entry *shared_entry = get_shared_entry (file, offset);
+  if (shared_entry == NULL) {
+    ASSERT (pagedir_get_page (thread_current ()->process->pagedir, spt_entry->upage) == NULL);
+    lock_release (&shared_table_lock);
+    return;
+  }
   ASSERT (shared_entry != NULL);
-  list_remove (&spt_entry->aux.shared.elem);
+  list_remove (&spt_entry->aux.file.elem);
   if (list_empty(&shared_entry->spt_ptrs)) {
     /* Destroy the entry if the process was the last one sharing it */
     struct hash_elem *removed_elem = 

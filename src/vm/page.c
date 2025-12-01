@@ -1,6 +1,7 @@
 #include "vm/page.h"
 #include "vm/shared.h"
 #include "vm/frame.h"
+#include "threads/vaddr.h"
 #include "lib/debug.h"
 #include "userprog/process.h"
 #include "filesys/file.h"
@@ -45,7 +46,6 @@ spt_record_file_page (struct hash *spt, struct file *file, off_t ofs,
   entry->aux.file.file = file;
   entry->aux.file.ofs = ofs;
   entry->aux.file.page_read_bytes = page_read_bytes;
-  entry->aux.file.page_zero_bytes = page_zero_bytes;
   struct hash_elem* prev_elem = hash_insert (spt, &entry->elem);
   ASSERT (prev_elem == NULL);
 }
@@ -77,12 +77,13 @@ spt_destroy_entry (struct hash_elem *e, void *aux UNUSED)
 {
   struct spt_entry *spt_entry = hash_entry (e, struct spt_entry, elem);
   switch (spt_entry->status) {
-    case SHARED:
-      unlink_shared_entry (spt_entry->aux.shared.file,
-                           spt_entry->aux.shared.ofs,
-                           spt_entry);
-      break;
     case FILE:
+      if (!spt_entry->writable) {
+        unlink_shared_entry (spt_entry->aux.file.file,
+                             spt_entry->aux.file.ofs,
+                             spt_entry);
+      }
+      break;
     case FRAME:
     case ZERO:
     case SWAP:
@@ -103,7 +104,7 @@ spt_load_file_page (struct spt_entry* spt_entry) {
   struct file *file      = spt_entry->aux.file.file;
   off_t offset           = spt_entry->aux.file.ofs;
   size_t page_read_bytes = spt_entry->aux.file.page_read_bytes;
-  size_t page_zero_bytes = spt_entry->aux.file.page_zero_bytes;
+  size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
   if (writable) {
     uint8_t *kpage = load_page_from_file (file, offset, upage, page_read_bytes,
@@ -111,9 +112,6 @@ spt_load_file_page (struct spt_entry* spt_entry) {
     if (kpage == NULL) {
       return false;
     }
-    /* TODO: Remove for now, for eviction probably need
-     * to transition to another state, e.g., FILE_LOADED */
-    spt_remove_entry (&thread_current()->process->spt, spt_entry);
     return true;
   }
   /* Link the spt_entry to the shared_entry */
@@ -146,12 +144,6 @@ spt_load_file_page (struct spt_entry* spt_entry) {
   return true;
 }
 
-/* Turn FILE entry into SHARED enrtry */
-void
-spt_turn_entry_shared (struct spt_entry *spt_entry) {
-  ASSERT (spt_entry->status == FILE);
-  spt_entry->status = SHARED;
-}
 /* Removes the page at address upage in the spt table. */
 void
 spt_remove_page (void* upage) {
@@ -159,6 +151,4 @@ spt_remove_page (void* upage) {
   struct spt_entry *entry = spt_get_entry (spt, upage);
   hash_delete (spt, &entry->elem);
 }
-
-
 

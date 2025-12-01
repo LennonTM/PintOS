@@ -13,7 +13,6 @@ enum page_status {
   FRAME,
   SWAP,
   FILE,
-  SHARED,
   ZERO
 };
 
@@ -21,12 +20,6 @@ struct file_aux {
   struct file* file;        /* Pointer to the struct file. */
   size_t ofs;               /* The number of bytes offset within the file. */
   size_t page_read_bytes;   /* Number of bytes to read from the file. */
-  size_t page_zero_bytes;   /* Number of bytes to fill with zeros. */
-};
-
-struct shared_aux {
-  struct file* file;        /* Pointer to the struct file. */
-  size_t ofs;               /* The number of bytes offset within the file. */
   struct list_elem elem;    /* Element on the list of shared_entry spt_ptrs */
 };
 
@@ -42,7 +35,6 @@ struct frame_aux {
    meta data between different locations page could be stored. */
 union spt_entry_aux {
   struct file_aux file;
-  struct shared_aux shared;
   struct swap_aux swap;
   struct frame_aux frame;
 };
@@ -79,7 +71,6 @@ struct spt_entry *spt_get_entry (struct hash *spt, void *upage);
 void spt_destroy (struct hash *spt);
 bool spt_load_file_page (struct spt_entry* spt_entry);
 void spt_share_entry (struct spt_entry *spt_entry, struct list *shared_list);
-void spt_turn_entry_shared (struct spt_entry *spt_entry);
 void spt_remove_page (void* upage);
 
 #endif 
