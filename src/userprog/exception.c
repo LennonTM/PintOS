@@ -209,6 +209,8 @@ page_fault (struct intr_frame *f)
       if (!load_page_zeroing(fault_page, true)) {
         process_exit (PROC_ERR);
       }
+      /* Successfully grew the stack */
+      return;
     }
   }
 
