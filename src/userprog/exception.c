@@ -188,10 +188,6 @@ page_fault (struct intr_frame *f)
           /* Page is to be lazy-loaded from a file */
           spt_load_file_page (spt_entry);
           break;
-        case ZERO:
-          PANIC("Page fault unimplemented: ZERO");
-        case FRAME:
-          PANIC("Page fault unimplemented: FRAME");
       }
       lock_release(&frame_lock);
       return;

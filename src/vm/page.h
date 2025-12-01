@@ -10,10 +10,8 @@
 /* Every page is either in a frame, in the swap partition or in the file system. 
    It could also be an all-zero page. */
 enum page_status {
-  FRAME,
   SWAP,
   FILE,
-  ZERO
 };
 
 struct file_aux {
@@ -27,16 +25,11 @@ struct swap_aux {
   size_t index; /* Index within the swap disk. */
 };
 
-struct frame_aux {
-  uint32_t* k_addr; /*Kernel address to the frame used. */
-};
-
 /* We use a union to reduce size of struct when using mutually exclusive
    meta data between different locations page could be stored. */
 union spt_entry_aux {
   struct file_aux file;
   struct swap_aux swap;
-  struct frame_aux frame;
 };
 
 /* Entry to the Supplementary Page Table. */

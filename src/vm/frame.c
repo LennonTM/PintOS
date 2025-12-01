@@ -99,9 +99,6 @@ frame_evict (void) {
           break;
         case SWAP:
           PANIC ("SWAP page must not be mapped");
-        case ZERO:
-        case FRAME:
-          PANIC ("Unimplemented spte status");
       }
     }
     else if (is_dirty) {

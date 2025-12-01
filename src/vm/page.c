@@ -105,10 +105,6 @@ spt_destroy_entry (struct hash_elem *e, void *aux UNUSED)
                              spt_entry);
       }
       break;
-    case FRAME:
-      PANIC ("Destroy entry: unimplemented spte state FRAME");
-    case ZERO:
-      PANIC ("Destroy entry: unimplemented spte state ZERO");
     case SWAP:
       ASSERT (!present);
       /* Only stack pages are stored in the swap space,
