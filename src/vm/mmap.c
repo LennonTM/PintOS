@@ -21,7 +21,7 @@ void free_mmap_table(struct mmap_table* mmap_table) {
         ASSERT (entry != NULL);
         /* Remove list_elem from the list before freeing the entry */
         e = list_remove (e);
-        free_entry(entry);
+        mmap_free_entry(entry);
     }
 }
 
@@ -37,7 +37,7 @@ get_next_mapid (struct mmap_table* mmap_table) {
 }
 
 /* Performs a linear search for entry with id of mapping. */
-struct mmap_entry* get_entry(struct mmap_table* mmap_table, mapid_t mapping) {
+struct mmap_entry* mmap_get_entry(struct mmap_table* mmap_table, mapid_t mapping) {
     if (mapping < FIRST_MAP_ID) {
         return NULL;
     }
@@ -55,7 +55,7 @@ struct mmap_entry* get_entry(struct mmap_table* mmap_table, mapid_t mapping) {
 }
 
 /* Creates new entry in table with a single page*/
-mapid_t new_entry (
+mapid_t mmap_new_entry (
     struct mmap_table* mmap_table, 
     void* upage, 
     struct file* file
@@ -72,14 +72,14 @@ mapid_t new_entry (
 }
 
 /* Adds another page to the mapping by incrementing page_no */
-void increment_pages_no(struct mmap_table* mmap_table, mapid_t mapping) {
-    struct mmap_entry * entry = get_entry(mmap_table, mapping);
+void mmap_increment_pages_no(struct mmap_table* mmap_table, mapid_t mapping) {
+    struct mmap_entry * entry = mmap_get_entry(mmap_table, mapping);
     entry->no_pages++;   
 }
 /* Iterates through the pages mapped in entry, removes them from the 
    SPT table/page table and removes/frees the entry in the mmap_table. 
    Performs write backs to file if page is dirty. */
-void free_entry(struct mmap_entry * entry) {
+void mmap_free_entry(struct mmap_entry * entry) {
     ASSERT(entry != NULL);
 
     uint32_t *pagedir = thread_current()->process->pagedir;
