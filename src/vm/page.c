@@ -171,7 +171,7 @@ spt_load_file_page (struct spt_entry* spt_entry) {
 void
 spt_remove_page (void* upage) {
   struct hash *spt = &thread_current()->process->spt;
-  struct spt_entry *entry = spt_get_entry (spt, upage);
-  hash_delete (spt, &entry->elem);
+  struct spt_entry *spt_entry = spt_get_entry (spt, upage);
+  spt_remove_entry (spt, spt_entry);
 }
 
