@@ -77,9 +77,8 @@ frame_evict (void) {
 
   ASSERT(victim != NULL);
 
-  for (struct list_elem *e = list_begin (&victim->owners);
-       e != list_end (&victim->owners);
-       e = list_next (e))
+  struct list_elem *e = list_begin (&victim->owners);
+  while (e != list_end (&victim->owners))
   {
     struct frame_owner *owner = list_entry (e, struct frame_owner, elem);
     struct spt_entry *spt_entry =
@@ -108,10 +107,14 @@ frame_evict (void) {
       spt_record_swap_page (&owner->process->spt, owner->upage, 
                             true, swap_index);
     }
-
     /* The next time a process touches the address, it will trigger a
        page fault, so the page can be loaded again */
     pagedir_clear_page(owner->process->pagedir, owner->upage);
+
+    /* Get the next element before freeing the owner */
+    struct list_elem *next_e = list_next (e);
+    free (owner);
+    e = next_e;
   }
 
   /* Reset the frame table entry */
