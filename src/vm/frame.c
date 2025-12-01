@@ -66,12 +66,13 @@ frame_evict (void) {
         accessed = true;
       }
     }
+    eviction_search_index = (eviction_search_index + 1) % user_pages;
+
     if (accessed) {
       victim = frame;
       kpage = frame_addr;
+      break;
     }
-
-    eviction_search_index = (eviction_search_index + 1) % user_pages;
   }
 
   ASSERT(victim != NULL);
