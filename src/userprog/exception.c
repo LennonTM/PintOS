@@ -6,7 +6,10 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "userprog/process.h"
+#include "userprog/pagedir.h"
 #include "vm/page.h"
+#include "devices/swap.h"
+#include "vm/frame.h"
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
@@ -154,22 +157,58 @@ page_fault (struct intr_frame *f)
 
   struct process *proc = thread_current()->process; 
   void *fault_page = pg_round_down(fault_addr);
-  
+
   if (not_present) {
+    /* Check via SPT */
     struct spt_entry *spt_entry = spt_get_entry (&proc->spt, fault_page);
     if (spt_entry != NULL) {
+      /* Aquire lock to ensure consistency in SPT status */
+      lock_acquire(&frame_lock);
+
       switch (spt_entry->status) {
         case FRAME:
-          PANIC("IF IT'S IN THE FRAME WHY ARE WE PAGE FAULTING???");
+          /* Faulting on a page in frame is usually due to the user attempting
+          to write to a read-only page */
+          if (write && !spt_entry->writable) {
+            lock_release(&frame_lock);
+            process_exit(PROC_ERR);
+          }
+
+          /* Any other fault on a present frame is a kernel bug */
+          PANIC("Page fault on present frame.");
         case SWAP:
-          PANIC("UNIMPLEMENTED: SWAP IN PAGE FAULT");
+          {
+            void *kpage = frame_alloc(PAL_USER); /* Allocate a new physical frame */
+            if (kpage == NULL) {
+              PANIC("Swap in: out of frames.");
+            }
+
+            if (!pagedir_set_page(proc->pagedir, spt_entry->upage, 
+                                  kpage, spt_entry->writable))
+            {
+              frame_free(kpage);
+              PANIC("Swap in: Install page failed.");
+            }
+
+            frame_install_page(spt_entry->upage, kpage, spt_entry->writable);
+            swap_in(kpage,spt_entry->aux.swap.index); /* Read data from swap disk into RAM*/
+
+            spt_entry->status = FRAME;
+            spt_entry->aux.frame.k_addr = kpage;
+            
+            lock_release(&frame_lock);
+            return;
+          }
         case FILE:
           /* Page is to be lazy-loaded from a file */
           spt_load_file_page (spt_entry);
+          spt_entry->status = FRAME;
           break;
         case ZERO:
           PANIC("UNIMPLEMENTED: SWAP IN PAGE FAULT");
+          break;
       }
+      lock_release(&frame_lock);
       return;
     }
 
@@ -183,13 +222,12 @@ page_fault (struct intr_frame *f)
         recover_flag must have been set */
       ASSERT (user || proc->recover_flag);
       /* Verify that the stack is less than STACK_GROWTH_MAX_SIZE */
-      if (fault_addr < PHYS_BASE - STACK_GROWTH_MAX_SIZE)
+      if ((uintptr_t)fault_addr < PHYS_BASE - STACK_GROWTH_MAX_SIZE)
         process_exit (PROC_ERR);
       /* Load the page */
       if (!load_page_zeroing(fault_page, true)) {
         process_exit (PROC_ERR);
       }
-      return;
     }
   }
 

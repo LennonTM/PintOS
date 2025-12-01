@@ -194,3 +194,10 @@ page_from_pool (const struct pool *pool, void *page)
 
   return page_no >= start_page && page_no < end_page;
 }
+
+/* Returns the base address of the user memory pool */
+void *
+palloc_get_user_pool_base (void)
+{
+  return user_pool.base;
+}

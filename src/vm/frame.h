@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include <stdbool.h>
 #include "threads/palloc.h"
+#include "threads/synch.h"
 
 struct frame_table_entry {
     /* frame_table index tells us the kernel address and physical address */
@@ -24,4 +25,5 @@ void frame_table_init (void);
 void *frame_alloc (enum palloc_flags flags);
 bool frame_install_page (void *upage, void *kpage, bool writable);
 void frame_free (void *kpage);
+extern struct lock frame_lock;
 #endif
