@@ -94,21 +94,18 @@ frame_evict (void) {
             /* If file is denied writes, then file_write will not
               modify the file, which is a desired behaviour */
             struct file_aux *f = &spt_entry->aux.file;
-            file_write (f->file, spt_entry->upage, f->ofs);
+            file_write_at (f->file, owner->upage, f->page_read_bytes, f->ofs);
           }
           break;
         case SWAP:
           PANIC ("SWAP page must not be mapped");
       }
     }
-    else if (is_dirty) {
-      /* Otherwise, the page is a stack page */
+    else {
       size_t swap_index = swap_out(kpage);
-      spt_record_swap_page (&owner->process->spt, owner->upage, 
-                            true, swap_index);
+      spt_record_swap_page (&owner->process->spt, owner->upage, true, swap_index);
     }
-    /* The next time a process touches the address, it will trigger a
-       page fault, so the page can be loaded again */
+
     pagedir_clear_page(owner->process->pagedir, owner->upage);
 
     /* Get the next element before freeing the owner */
