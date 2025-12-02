@@ -120,7 +120,11 @@ unlink_shared_entry (struct file *file, off_t offset,
      This allows to  */
   lock_acquire (&shared_table_lock);
   struct shared_entry *shared_entry = get_shared_entry (file, offset);
-  ASSERT (shared_entry != NULL);
+  /* If shared_entry is NULL, it has already been freed by another process */
+  if (shared_entry == NULL) {
+    lock_release(&shared_table_lock);
+    return;
+  }
   list_remove (&spt_entry->aux.file.elem);
   if (list_empty(&shared_entry->spt_ptrs)) {
     /* Destroy the entry if the process was the last one sharing it */
