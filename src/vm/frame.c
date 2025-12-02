@@ -167,8 +167,36 @@ frame_alloc (enum palloc_flags flags) {
    the corresponding frame_table_entry will be unused after */
 void
 frame_free (void *kpage) {
-  /* TODO: verify that owners are unaffected */
-  palloc_free_page(kpage);
+  bool lock_held = lock_held_by_current_thread(&frame_lock);
+  if (!lock_held) lock_acquire(&frame_lock);
+
+  size_t frame_index = get_page_index(kpage);
+  ASSERT(frame_index < get_user_pages());
+
+  struct frame_table_entry *frame = &frame_table[frame_index];
+
+  struct list_elem *e = list_begin(&frame->owners);
+  struct frame_owner *found_owner = NULL;
+
+  while (e != list_end(&frame->owners)) {
+    struct frame_owner *owner = list_entry(e, struct frame_owner, elem);
+    if (owner->process == thread_current()->process) {
+      found_owner = owner;
+      break;
+    }
+    e = list_next(e);
+  }
+
+  if (found_owner != NULL) {
+    list_remove(&found_owner->elem);
+    free(found_owner);
+  }
+  
+  if (list_empty(&frame->owners)) {
+    palloc_free_page(kpage);
+  }
+
+  if (!lock_held) lock_release(&frame_lock);
 }
 
 /* Maps user virtual address UPAGE to a frame at KPAGE
