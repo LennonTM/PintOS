@@ -101,11 +101,15 @@ frame_evict (void) {
           PANIC ("SWAP page must not be mapped");
       }
     }
-    else {
+    else if (is_dirty) {
+      /* Otherwise, the page is a stack page */
       size_t swap_index = swap_out(kpage);
-      spt_record_swap_page (&owner->process->spt, owner->upage, true, swap_index);
+      spt_record_swap_page (&owner->process->spt, owner->upage,
+                            true, swap_index);
     }
 
+    /* The next time a process touches the address, it will trigger a
+       page fault, so the page can be loaded again */
     pagedir_clear_page(owner->process->pagedir, owner->upage);
 
     /* Get the next element before freeing the owner */
