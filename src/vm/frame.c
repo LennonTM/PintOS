@@ -187,9 +187,15 @@ frame_install_page(void *upage, void *kpage, bool writable) {
   }
   owner->upage = upage;
   owner->process = thread_current()->process;
+
+  bool lock_held = lock_held_by_current_thread(&frame_lock);
+  if (!lock_held) lock_acquire(&frame_lock);
+
   /* The frame must have been allocated before any calls to install */
   size_t frame_index = get_page_index(kpage);
   struct frame_table_entry *frame = &frame_table[frame_index];
   list_push_front (&frame->owners, &owner->elem);
+  
+  if (!lock_held) lock_release(&frame_lock);
   return true;
 }
