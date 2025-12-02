@@ -74,7 +74,7 @@ create_shared_entry (struct file *file, off_t offset)
   shared_entry->file = file;
   shared_entry->offset = offset;
   shared_entry->kpage = NULL;
-  list_init (&shared_entry->spt_ptrs);
+  shared_entry->reference_count = 1;
   lock_init (&shared_entry->lock);
 
   struct hash_elem *prev_elem =
@@ -102,10 +102,9 @@ link_to_shared_entry (struct file *file, off_t offset,
       return NULL;
     }
   }
-  /* It is important to add spt_entry to a list of
-     spt pointers while HOLDING SHARED TABLE LOCK,
-     so that no other process destroys the entry */
-  list_push_front (&shared_entry->spt_ptrs, &spt_entry->aux.file.elem);
+  /* It is important to increment/decrement refference count while holding lock
+     so that only a single process destroys the entry (when the count = 0).*/
+  shared_entry->reference_count++;
   lock_release (&shared_table_lock);
   return shared_entry;
 }
@@ -125,8 +124,8 @@ unlink_shared_entry (struct file *file, off_t offset,
     lock_release(&shared_table_lock);
     return;
   }
-  list_remove (&spt_entry->aux.file.elem);
-  if (list_empty(&shared_entry->spt_ptrs)) {
+  shared_entry->reference_count--;
+  if (shared_entry->reference_count == 0) {
     /* Destroy the entry if the process was the last one sharing it */
     struct hash_elem *removed_elem = 
       hash_delete (&shared_table, &shared_entry->elem);

@@ -18,7 +18,7 @@ struct shared_entry {
   struct lock lock;         /* Lock to atomically access shared entry */
 
   void *kpage;              /* Kernel virtual address of shared frame */
-  struct list spt_ptrs;     /* SPT entries for pages sharing this frame */
+  int reference_count;     /* Number of processes that reference the entry. */
 
   struct hash_elem elem;
 };
