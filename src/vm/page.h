@@ -18,7 +18,6 @@ struct file_aux {
   struct file* file;        /* Pointer to the struct file. */
   size_t ofs;               /* The number of bytes offset within the file. */
   size_t page_read_bytes;   /* Number of bytes to read from the file. */
-  struct list_elem elem;    /* Element on the list of shared_entry spt_ptrs */
 };
 
 struct swap_aux {
