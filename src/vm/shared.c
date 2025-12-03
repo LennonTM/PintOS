@@ -74,7 +74,7 @@ create_shared_entry (struct file *file, off_t offset)
   shared_entry->file = file;
   shared_entry->offset = offset;
   shared_entry->kpage = NULL;
-  shared_entry->reference_count = 1;
+  shared_entry->reference_count = 0;
   lock_init (&shared_entry->lock);
 
   struct hash_elem *prev_elem =
