@@ -188,6 +188,7 @@ page_fault (struct intr_frame *f)
           }
           break;
         case FILE:
+        case W_EXEC:
           /* Page is to be lazy-loaded from a file */
           spt_load_file_page (spt_entry);
           break;

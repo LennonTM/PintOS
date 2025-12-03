@@ -52,6 +52,32 @@ spt_record_file_page (struct hash *spt, struct file *file, off_t ofs,
   ASSERT (prev_elem == NULL);
 }
 
+/* Records the executable page starting at upage in spt. ofs is the offset 
+   within
+   the file. page_read_bytes is the number of bytes that can be read of the
+   file in the page, page_zero_bytes is the rest of the bytes in the page 
+   which are zero.*/
+void
+spt_record_exec_page (struct hash *spt, struct file *file, off_t ofs,
+                      uint8_t *upage, uint32_t page_read_bytes,
+                      uint32_t page_zero_bytes, bool writable)
+{
+  struct spt_entry *entry = 
+    (struct spt_entry *) malloc (sizeof (struct spt_entry));
+  if (entry == NULL) {
+    /* Kernel ran out of memory */
+    process_exit (PROC_ERR);
+  }
+  entry->upage = upage;
+  entry->writable = writable;
+  entry->status = writable ? W_EXEC : FILE;
+  entry->aux.file.file = file;
+  entry->aux.file.ofs = ofs;
+  entry->aux.file.page_read_bytes = page_read_bytes;
+  struct hash_elem* prev_elem = hash_insert (spt, &entry->elem);
+  ASSERT (prev_elem == NULL);
+}
+
 void
 spt_record_swap_page (struct hash *spt, uint8_t *upage, bool writable,
                       size_t swap_index) {

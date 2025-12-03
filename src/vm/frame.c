@@ -10,6 +10,7 @@
 
 #include "userprog/pagedir.h"
 #include "vm/page.h"
+#include "vm/shared.h"
 #include "devices/swap.h"
 
 /* Lock prevents race conditions when accessing the frame table
@@ -95,6 +96,20 @@ frame_evict (void) {
               modify the file, which is a desired behaviour */
             struct file_aux *f = &spt_entry->aux.file;
             file_write_at (f->file, owner->upage, f->page_read_bytes, f->ofs);
+          }
+          else {
+            struct file_aux *f = &spt_entry->aux.file;
+            unlink_shared_entry (f->file, f->ofs, spt_entry);
+          }
+          /* Otherwise the page is cleared from memory, but
+             spt entry is kept to load it again later */
+          break;
+        case W_EXEC:
+          if (is_dirty) {
+            size_t swap_index = swap_out(kpage);
+            spt_remove_entry (&owner->process->spt, spt_entry);
+            spt_record_swap_page (&owner->process->spt, owner->upage,
+                                  true, swap_index);
           }
           break;
         case SWAP:

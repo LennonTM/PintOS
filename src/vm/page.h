@@ -12,6 +12,7 @@
 enum page_status {
   SWAP,
   FILE,
+  W_EXEC,
 };
 
 struct file_aux {
@@ -56,6 +57,9 @@ spt_less (const struct hash_elem *a_, const struct hash_elem *b_,
 void *aux UNUSED);
 
 void spt_record_file_page (struct hash *spt, struct file *file, off_t ofs,
+                           uint8_t *upage, uint32_t page_read_bytes,
+                           uint32_t page_zero_bytes, bool writable);
+void spt_record_exec_page (struct hash *spt, struct file *file, off_t ofs,
                            uint8_t *upage, uint32_t page_read_bytes,
                            uint32_t page_zero_bytes, bool writable);
 void spt_record_swap_page (struct hash *spt, uint8_t *upage, bool writable,
