@@ -160,6 +160,7 @@ page_fault (struct intr_frame *f)
 
   if (not_present) {
     /* Check via SPT */
+    ASSERT (user || proc->recover_flag);
     struct spt_entry *spt_entry = spt_get_entry (&proc->spt, fault_page);
     if (spt_entry != NULL) {
       /* Aquire lock to ensure consistency in SPT status */
@@ -180,7 +181,9 @@ page_fault (struct intr_frame *f)
               PANIC("Swap in: Install page failed.");
             }
             /* Read data from swap space into RAM */
-            swap_in(kpage,spt_entry->aux.swap.index);
+            swap_in (kpage, spt_entry->aux.swap.index);
+            /* Restore dirty bit since only dirty pages are written to swap */
+            pagedir_set_dirty (proc->pagedir, spt_entry->upage, true);
             spt_remove_entry (&proc->spt, spt_entry);
           }
           break;
