@@ -85,6 +85,10 @@ frame_evict (void) {
     struct spt_entry *spt_entry =
       spt_get_entry(&owner->process->spt, owner->upage);
 
+    /* The next time a process touches the address, it will trigger a
+    page fault, so the page can be loaded again */
+    pagedir_clear_page(owner->process->pagedir, owner->upage);
+    
     bool is_dirty = pagedir_is_dirty(owner->process->pagedir, owner->upage);
 
     if (spt_entry != NULL) {
@@ -95,7 +99,7 @@ frame_evict (void) {
             /* If file is denied writes, then file_write will not
               modify the file, which is a desired behaviour */
             struct file_aux *f = &spt_entry->aux.file;
-            file_write_at (f->file, owner->upage, f->page_read_bytes, f->ofs);
+            file_write_at (f->file, kpage, f->page_read_bytes, f->ofs);
           }
           else if (!spt_entry->writable) {
             struct file_aux *f = &spt_entry->aux.file;
@@ -122,10 +126,6 @@ frame_evict (void) {
       spt_record_swap_page (&owner->process->spt, owner->upage,
                             true, swap_index);
     }
-
-    /* The next time a process touches the address, it will trigger a
-       page fault, so the page can be loaded again */
-    pagedir_clear_page(owner->process->pagedir, owner->upage);
 
     /* Get the next element before freeing the owner */
     struct list_elem *next_e = list_next (e);
