@@ -95,6 +95,23 @@ spt_record_swap_page (struct hash *spt, uint8_t *upage, bool writable,
   ASSERT (prev_elem == NULL);
 }
 
+void
+spt_record_frame_page (struct hash *spt, uint8_t *upage, bool writable,
+                       void *kpage) {
+  struct spt_entry *entry =
+    (struct spt_entry *) malloc (sizeof (struct spt_entry));
+  if (entry == NULL) {
+    /* Kernel ran out of memory */
+    process_exit (PROC_ERR);
+  }
+  entry->upage = upage;
+  entry->writable = writable;
+  entry->status = FRAME;
+  entry->aux.frame.kpage = kpage;
+  struct hash_elem* prev_elem = hash_insert (spt, &entry->elem);
+  ASSERT (prev_elem == NULL);
+}
+
 /* Removes provided entry from the SPT
    returns true if entry was removed successfully */
 bool 
@@ -136,6 +153,11 @@ spt_destroy_entry (struct hash_elem *e, void *aux UNUSED)
       /* Only stack pages are stored in the swap space,
          so reclaim swap space by dropping the page */
       swap_drop (spt_entry->aux.swap.index);
+      break;
+    case W_EXEC:
+      break;
+    case FRAME:
+      frame_free (spt_entry->aux.frame.kpage);
       break;
   }
   free (spt_entry); 

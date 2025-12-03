@@ -184,7 +184,8 @@ page_fault (struct intr_frame *f)
             swap_in (kpage, spt_entry->aux.swap.index);
             /* Restore dirty bit since only dirty pages are written to swap */
             pagedir_set_dirty (proc->pagedir, spt_entry->upage, true);
-            spt_remove_entry (&proc->spt, spt_entry);
+            spt_entry->status = FRAME;
+            spt_entry->aux.frame.kpage = kpage;
           }
           break;
         case FILE:
@@ -210,10 +211,12 @@ page_fault (struct intr_frame *f)
       if ((uintptr_t)fault_addr < PHYS_BASE - STACK_GROWTH_MAX_SIZE)
         process_exit (PROC_ERR);
       /* Load the page */
-      if (!load_page_zeroing(fault_page, true)) {
+      void *kpage = load_page_zeroing(fault_page, true);
+      if (kpage == NULL) {
         process_exit (PROC_ERR);
       }
       /* Successfully grew the stack */
+      spt_record_frame_page (&proc->spt, fault_page, true, kpage);
       return;
     }
   }

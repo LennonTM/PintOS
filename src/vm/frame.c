@@ -91,6 +91,7 @@ frame_evict (void) {
     
     bool is_dirty = pagedir_is_dirty(owner->process->pagedir, owner->upage);
 
+    ASSERT (spt_entry != NULL);
     if (spt_entry != NULL) {
       switch (spt_entry->status) {
         case FILE:
@@ -111,13 +112,18 @@ frame_evict (void) {
         case W_EXEC:
           if (is_dirty) {
             size_t swap_index = swap_out(kpage);
-            spt_remove_entry (&owner->process->spt, spt_entry);
-            spt_record_swap_page (&owner->process->spt, owner->upage,
-                                  true, swap_index);
+            spt_entry->status = SWAP;
+            spt_entry->aux.swap.index = swap_index;
           }
           break;
         case SWAP:
           PANIC ("SWAP page must not be mapped");
+        case FRAME:
+          if (is_dirty) {
+            size_t swap_index = swap_out(kpage);
+            spt_entry->status = SWAP;
+            spt_entry->aux.swap.index = swap_index;
+          }
       }
     }
     else if (is_dirty) {
@@ -208,9 +214,10 @@ frame_free (void *kpage) {
     free(found_owner);
   }
   
-  if (list_empty(&frame->owners)) {
-    palloc_free_page(kpage);
-  }
+  /* Let freeing the pages be handled by pagedir_destroy */
+  // if (list_empty(&frame->owners)) {
+  //   palloc_free_page(kpage);
+  // }
 
   if (!lock_held) lock_release(&frame_lock);
 }

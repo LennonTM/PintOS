@@ -13,6 +13,7 @@ enum page_status {
   SWAP,
   FILE,
   W_EXEC,
+  FRAME,
 };
 
 struct file_aux {
@@ -25,11 +26,16 @@ struct swap_aux {
   size_t index; /* Index within the swap disk. */
 };
 
+struct frame_aux {
+  void *kpage; /* Kernel virtual address of the frame */
+};
+
 /* We use a union to reduce size of struct when using mutually exclusive
    meta data between different locations page could be stored. */
 union spt_entry_aux {
   struct file_aux file;
   struct swap_aux swap;
+  struct frame_aux frame;
 };
 
 /* Entry to the Supplementary Page Table. */
@@ -64,6 +70,8 @@ void spt_record_exec_page (struct hash *spt, struct file *file, off_t ofs,
                            uint32_t page_zero_bytes, bool writable);
 void spt_record_swap_page (struct hash *spt, uint8_t *upage, bool writable,
                            size_t swap_index);
+void spt_record_frame_page (struct hash *spt, uint8_t *upage, bool writable,
+                            void *kpage);
 bool spt_remove_entry (struct hash *spt, struct spt_entry *entry);
 struct spt_entry *spt_get_entry (struct hash *spt, void *upage);
 void spt_destroy (struct hash *spt);

@@ -8,6 +8,8 @@
 #include "userprog/process.h"
 #include "userprog/pagedir.h"
 
+#include <stdio.h>
+
 /* frame_table_entry is an array of all frame_table entries */
 static struct hash shared_table;
 static struct lock shared_table_lock;
@@ -119,11 +121,7 @@ unlink_shared_entry (struct file *file, off_t offset,
      This allows to  */
   lock_acquire (&shared_table_lock);
   struct shared_entry *shared_entry = get_shared_entry (file, offset);
-  /* If shared_entry is NULL, it has already been freed by another process */
-  if (shared_entry == NULL) {
-    lock_release(&shared_table_lock);
-    return;
-  }
+  ASSERT (shared_entry != NULL);
   shared_entry->reference_count--;
   if (shared_entry->reference_count == 0) {
     /* Destroy the entry if the process was the last one sharing it */

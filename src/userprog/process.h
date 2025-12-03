@@ -90,7 +90,7 @@ void process_activate (void);
 uint8_t *load_page_from_file (struct file *file, off_t ofs, uint8_t *upage,
                               uint32_t page_read_bytes,
                               uint32_t page_zero_bytes, bool writable);
-bool load_page_zeroing (uint8_t *upage, bool writable);
+uint8_t *load_page_zeroing (uint8_t *upage, bool writable);
 bool install_page (void *upage, void *kpage, bool writable);
 void uninstall_page (void *upage);
 #endif /* userprog/process.h */

@@ -777,19 +777,19 @@ load_page_from_file (struct file *file, off_t ofs, uint8_t *upage,
 
 /* Loads a page at upage and fills it with zeros. Installs it into the page 
    table and frame table. */
-bool
+uint8_t *
 load_page_zeroing (uint8_t *upage, bool writable)
 {
   uint8_t *kpage = frame_alloc(PAL_USER | PAL_ZERO);
   if (kpage == NULL)
-    return false;
+    return NULL;
 
   if (!frame_install_page(upage, kpage, writable)) {
     frame_free(kpage);
-    return false;
+    return NULL;
   }
 
-  return true;
+  return kpage;
 }
 
 /* Populates Supplementary page table of the process with
@@ -848,9 +848,9 @@ setup_stack (void **esp)
   bool success = false;
 
   kpage = frame_alloc (PAL_USER | PAL_ZERO);
+  void *upage = ((uint8_t *) PHYS_BASE) - PGSIZE;
   if (kpage != NULL) 
     {
-      void *upage = ((uint8_t *) PHYS_BASE) - PGSIZE;
       success = frame_install_page (upage, kpage, true);
       if (success) {
         *esp = PHYS_BASE;
@@ -858,6 +858,7 @@ setup_stack (void **esp)
       else
         frame_free (kpage);
     }
+  spt_record_frame_page (&thread_current()->process->spt, upage, true, kpage);
   return success;
 }
 
