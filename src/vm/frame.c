@@ -97,7 +97,7 @@ frame_evict (void) {
             struct file_aux *f = &spt_entry->aux.file;
             file_write_at (f->file, owner->upage, f->page_read_bytes, f->ofs);
           }
-          else {
+          else if (!spt_entry->writable) {
             struct file_aux *f = &spt_entry->aux.file;
             unlink_shared_entry (f->file, f->ofs, spt_entry);
           }
