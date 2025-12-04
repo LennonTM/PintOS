@@ -221,3 +221,16 @@ spt_remove_page (void *upage)
   spt_remove_entry (spt, spt_entry);
 }
 
+enum page_status get_page_status (const void *upage) {
+  uint32_t *pd = thread_current()->process->pagedir; 
+  return pagedir_get_avl (pd, upage);
+}
+
+uint8_t pagedir_get_avl (uint32_t *pd, const void *upage);
+void pagedir_set_avl (uint32_t *pd, const void *upage, uint8_t data);
+
+void set_page_status (const void *upage, enum page_status status) {
+  uint32_t *pd = thread_current()->process->pagedir;
+  pagedir_set_avl (pd, upage, status);
+}
+

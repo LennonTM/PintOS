@@ -60,4 +60,7 @@ uint8_t *spt_load_file_page (struct spt_entry *spt_entry);
 bool spt_load_shared_page (struct spt_entry *spt_entry);
 void spt_remove_page (void *upage);
 
+enum page_status get_page_status (const void *upage);
+void set_page_status (const void *upage, enum page_status status);
+
 #endif 

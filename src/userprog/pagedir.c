@@ -242,6 +242,25 @@ pagedir_set_writable (uint32_t *pd, const void *vpage, bool writable)
     }
 }
 
+#define AVLSHIFT 9
+#define MAX_AVL_SIZE 0x8 /* b1000 */
+
+uint8_t pagedir_get_avl (uint32_t *pd, const void *vpage) {
+  uint32_t *pte = lookup_page (pd, vpage, false);
+  uint8_t data = (*pte & PTE_AVL) >> AVLSHIFT;
+  return data;
+}
+
+void pagedir_set_avl (uint32_t *pd, const void *vpage, uint8_t data) {
+  uint32_t *pte = lookup_page (pd, vpage, false);
+  ASSERT (data < MAX_AVL_SIZE); /* Data must be three bits */
+  if (pte != NULL) 
+    {
+      *pte &= ~PTE_AVL;
+      *pte |= (data << AVLSHIFT) & PTE_AVL;
+    }
+}
+
 /* Loads page directory PD into the CPU's page directory base
    register. */
 void
