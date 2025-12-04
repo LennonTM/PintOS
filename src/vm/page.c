@@ -34,7 +34,7 @@ void *aux UNUSED)
 void
 spt_record_file_page (struct hash *spt, struct file *file, off_t ofs,
                       uint8_t *upage, uint32_t page_read_bytes,
-                      uint32_t page_zero_bytes, bool writable)
+                      bool writable)
 {
   struct spt_entry *entry = 
     (struct spt_entry *) malloc (sizeof (struct spt_entry));
@@ -58,7 +58,7 @@ spt_record_file_page (struct hash *spt, struct file *file, off_t ofs,
 void
 spt_record_exec_page (struct hash *spt, struct file *file, off_t ofs,
                       uint8_t *upage, uint32_t page_read_bytes,
-                      uint32_t page_zero_bytes, bool writable)
+                      bool writable)
 {
   struct spt_entry *entry = 
     (struct spt_entry *) malloc (sizeof (struct spt_entry));
@@ -94,8 +94,7 @@ spt_record_swap_page (struct hash *spt, uint8_t *upage, bool writable,
 }
 
 void
-spt_record_frame_page (struct hash *spt, uint8_t *upage, bool writable,
-                       void *kpage) {
+spt_record_frame_page (struct hash *spt, uint8_t *upage, bool writable) {
   struct spt_entry *entry =
     (struct spt_entry *) malloc (sizeof (struct spt_entry));
   if (entry == NULL) {

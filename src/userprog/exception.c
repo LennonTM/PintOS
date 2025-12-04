@@ -221,7 +221,7 @@ page_fault (struct intr_frame *f)
         process_exit (PROC_ERR);
       }
       /* Successfully grew the stack */
-      spt_record_frame_page (&proc->spt, fault_page, true, kpage);
+      spt_record_frame_page (&proc->spt, fault_page, true);
       return;
     }
   }

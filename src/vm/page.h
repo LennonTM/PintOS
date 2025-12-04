@@ -60,14 +60,13 @@ void *aux UNUSED);
 
 void spt_record_file_page (struct hash *spt, struct file *file, off_t ofs,
                            uint8_t *upage, uint32_t page_read_bytes,
-                           uint32_t page_zero_bytes, bool writable);
+                           bool writable);
 void spt_record_exec_page (struct hash *spt, struct file *file, off_t ofs,
                            uint8_t *upage, uint32_t page_read_bytes,
-                           uint32_t page_zero_bytes, bool writable);
+                           bool writable);
 void spt_record_swap_page (struct hash *spt, uint8_t *upage, bool writable,
                            size_t swap_index);
-void spt_record_frame_page (struct hash *spt, uint8_t *upage, bool writable,
-                            void *kpage);
+void spt_record_frame_page (struct hash *spt, uint8_t *upage, bool writable);
 bool spt_remove_entry (struct hash *spt, struct spt_entry *entry);
 struct spt_entry *spt_get_entry (struct hash *spt, void *upage);
 void spt_destroy (struct hash *spt);

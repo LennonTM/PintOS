@@ -827,9 +827,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       /* Record data about a lazy-loaded page in SPT */
       struct hash *spt = &thread_current()->process->spt;
       spt_record_exec_page (spt, file, ofs, upage,
-                            page_read_bytes, page_zero_bytes,
-                            writable);
-
+                            page_read_bytes, writable);
       /* Advance. */
       read_bytes -= page_read_bytes;
       zero_bytes -= page_zero_bytes;
@@ -858,7 +856,7 @@ setup_stack (void **esp)
       else
         frame_free (kpage);
     }
-  spt_record_frame_page (&thread_current()->process->spt, upage, true, kpage);
+  spt_record_frame_page (&thread_current()->process->spt, upage, true);
   return success;
 }
 
