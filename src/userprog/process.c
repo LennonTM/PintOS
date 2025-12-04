@@ -22,6 +22,7 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "devices/timer.h"
+#include "devices/swap.h"
 #include "vm/frame.h"
 #include "vm/page.h"
 #include "vm/shared.h"
@@ -731,6 +732,30 @@ validate_segment (const struct Elf32_Phdr *phdr, struct file *file)
 
   /* It's okay. */
   return true;
+}
+
+
+/* Loads a page from swap space into memory. */
+uint8_t *
+load_page_from_swap (struct spt_entry *spt_entry)
+{
+  void *kpage = frame_alloc(PAL_USER); /* Allocate a new physical frame */
+  ASSERT (kpage != NULL);
+
+  if (!frame_install_page(spt_entry->upage,
+                          kpage,
+                          spt_entry->writable))
+  {
+    frame_free(kpage);
+    /* TODO: Kill process, not the OS */
+    PANIC("Swap in: Install page failed.");
+  }
+  /* Read data from swap space into RAM */
+  swap_in (kpage, spt_entry->aux.swap.index);
+  /* Restore dirty bit since only dirty pages are written to swap */
+  pagedir_set_dirty (thread_current()->process->pagedir, spt_entry->upage, true);
+  spt_entry->status = SPT_FRAME;
+  return kpage;
 }
 
 /* Loads a page starting at offset OFS in FILE at address

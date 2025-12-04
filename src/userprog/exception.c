@@ -166,24 +166,7 @@ page_fault (struct intr_frame *f)
 
       switch (spt_entry->status) {
         case SPT_SWAP:
-          {
-            void *kpage = frame_alloc(PAL_USER); /* Allocate a new physical frame */
-            ASSERT (kpage != NULL);
-
-            if (!frame_install_page(spt_entry->upage,
-                                    kpage,
-                                    spt_entry->writable))
-            {
-              frame_free(kpage);
-              /* TODO: Kill process, not the OS */
-              PANIC("Swap in: Install page failed.");
-            }
-            /* Read data from swap space into RAM */
-            swap_in (kpage, spt_entry->aux.swap.index);
-            /* Restore dirty bit since only dirty pages are written to swap */
-            pagedir_set_dirty (proc->pagedir, spt_entry->upage, true);
-            spt_entry->status = SPT_FRAME;
-          }
+          load_page_from_swap (spt_entry);
           break;
         case SPT_FILE:
         case SPT_EXEC:
