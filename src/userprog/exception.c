@@ -210,7 +210,7 @@ page_fault (struct intr_frame *f)
         recover_flag must have been set */
       ASSERT (user || proc->recover_flag);
       /* Verify that the stack is less than STACK_GROWTH_MAX_SIZE */
-      if ((uintptr_t)fault_addr < PHYS_BASE - STACK_GROWTH_MAX_SIZE)
+      if (fault_addr < PHYS_BASE - STACK_GROWTH_MAX_SIZE)
         process_exit (PROC_ERR);
       /* Load the page */
       void *kpage = load_page_zeroing(fault_page, true);
