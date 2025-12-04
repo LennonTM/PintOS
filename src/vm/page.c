@@ -138,18 +138,18 @@ static void
 spt_destroy_entry (struct hash_elem *e, void *aux UNUSED)
 {
   struct spt_entry *spt_entry = hash_entry (e, struct spt_entry, elem);
-  bool present = pagedir_get_page (thread_current ()->process->pagedir,
-                                   spt_entry->upage) != NULL;
+  void *kpage = pagedir_get_page(thread_current()->process->pagedir,
+                                 spt_entry->upage);
   switch (spt_entry->status) {
     case FILE:
-      if (!spt_entry->writable && present) {
+      if (!spt_entry->writable && kpage != NULL) {
         unlink_shared_entry (spt_entry->aux.file.file,
                              spt_entry->aux.file.ofs,
                              spt_entry);
       }
       break;
     case SWAP:
-      ASSERT (!present);
+      ASSERT (kpage == NULL);
       /* Only stack pages are stored in the swap space,
          so reclaim swap space by dropping the page */
       swap_drop (spt_entry->aux.swap.index);
@@ -157,8 +157,11 @@ spt_destroy_entry (struct hash_elem *e, void *aux UNUSED)
     case W_EXEC:
       break;
     case FRAME:
-      frame_free (spt_entry->aux.frame.kpage);
+      ASSERT (kpage != NULL);
       break;
+  }
+  if (kpage != NULL) {
+    frame_free (kpage);
   }
   free (spt_entry); 
 }

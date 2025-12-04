@@ -8,8 +8,6 @@
 #include "userprog/process.h"
 #include "userprog/pagedir.h"
 
-#include <stdio.h>
-
 /* frame_table_entry is an array of all frame_table entries */
 static struct hash shared_table;
 static struct lock shared_table_lock;
@@ -73,7 +71,7 @@ create_shared_entry (struct file *file, off_t offset)
   if (shared_entry == NULL) {
     return NULL;
   }
-  shared_entry->file = file;
+  shared_entry->file = file_reopen (file);
   shared_entry->offset = offset;
   shared_entry->kpage = NULL;
   shared_entry->reference_count = 0;
@@ -128,6 +126,7 @@ unlink_shared_entry (struct file *file, off_t offset,
     struct hash_elem *removed_elem = 
       hash_delete (&shared_table, &shared_entry->elem);
     ASSERT (removed_elem != NULL);
+    file_close (shared_entry->file);
     free (shared_entry);
   }
   else {
