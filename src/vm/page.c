@@ -41,7 +41,8 @@ spt_create_entry (struct hash *spt, uint8_t *upage, bool writable,
     process_exit (PROC_ERR);
   }
   entry->upage = upage;
-  entry->writable = writable;
+  uint32_t *pd = thread_current()->process->pagedir;
+  pagedir_set_writable (pd, upage, writable);
   set_page_status (upage, status);
   struct hash_elem *prev_elem = hash_insert (spt, &entry->elem);
   ASSERT (prev_elem == NULL);
@@ -164,8 +165,10 @@ spt_remove_entry (struct hash *spt, struct spt_entry *entry) {
 bool
 spt_load_swap_page (struct spt_entry *spt_entry)
 {
+  uint32_t *pd = thread_current()->process->pagedir;
+  bool writable = pagedir_is_writable (pd, spt_entry->upage);
   bool success = load_page_from_swap (spt_entry->upage,
-                                      spt_entry->writable,
+                                      writable,
                                       spt_entry->aux.swap.index);
   if (success)
     set_page_status (spt_entry->upage, SPT_FRAME);
@@ -177,8 +180,10 @@ uint8_t *
 spt_load_file_page (struct spt_entry *spt_entry)
 {
   struct file_aux *f = &spt_entry->aux.file;
+  uint32_t *pd = thread_current()->process->pagedir;
+  bool writable = pagedir_is_writable (pd, spt_entry->upage);
   uint8_t *kpage = load_page_from_file (spt_entry->upage,
-                                        spt_entry->writable,
+                                        writable,
                                         f->file, 
                                         f->ofs,
                                         f->page_read_bytes);
@@ -189,8 +194,10 @@ spt_load_file_page (struct spt_entry *spt_entry)
 bool
 spt_load_shared_page (struct spt_entry *spt_entry)
 {
+  uint32_t *pd = thread_current()->process->pagedir;
+  bool writable = pagedir_is_writable(pd, spt_entry->upage);
   ASSERT(get_page_status(spt_entry->upage) == SPT_SHARED);
-  ASSERT (!spt_entry->writable);
+  ASSERT (!writable);
   struct file_aux *f = &spt_entry->aux.file;
 
   /* Link the spt_entry to the shared_entry */
@@ -213,7 +220,7 @@ spt_load_shared_page (struct spt_entry *spt_entry)
     shared_entry->kpage = kpage;
   } else {
     /* Install an existing page */
-    frame_install_page (spt_entry->upage, kpage, spt_entry->writable);
+    frame_install_page (spt_entry->upage, kpage, writable);
   }
   lock_release (&shared_entry->lock);
   return true;

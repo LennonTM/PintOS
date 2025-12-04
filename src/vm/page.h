@@ -33,7 +33,6 @@ union spt_entry_aux {
 
 struct spt_entry {
   void *upage;              /* User virtual address of the page. */
-  bool writable;            /* True if page is writable. */
   union spt_entry_aux aux;  /* Status-specific metadata. */
   struct hash_elem elem;
 };

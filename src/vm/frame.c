@@ -84,19 +84,21 @@ frame_evict (void)
     struct frame_owner *owner = list_entry (e, struct frame_owner, elem);
     struct spt_entry *spt_entry =
       spt_get_entry(&owner->process->spt, owner->upage);
+    uint32_t *pd = owner->process->pagedir;
 
     /* The next time a process touches the address, it will trigger a
     page fault, so the page can be loaded again */
-    pagedir_clear_page(owner->process->pagedir, owner->upage);
+    pagedir_clear_page(pd, owner->upage);
     
-    bool is_dirty = pagedir_is_dirty(owner->process->pagedir, owner->upage);
+    bool is_dirty = pagedir_is_dirty(pd, owner->upage);
+    bool writable = pagedir_is_writable(pd, owner->upage);
 
     /* All frame owner(s) hold necessary information in the spt_entry */
     ASSERT (spt_entry != NULL);
     enum page_status status = get_page_status (spt_entry->upage);
     switch (status) {
       case SPT_FILE:
-        ASSERT (spt_entry->writable);
+        ASSERT (writable);
         /* If a file page is dirty, write it to the file */
         if (is_dirty) {
           struct file_aux *f = &spt_entry->aux.file;
@@ -106,7 +108,7 @@ frame_evict (void)
             spt entry is kept to load it again later */
         break;
       case SPT_SHARED:
-        ASSERT (!spt_entry->writable);
+        ASSERT (!writable);
         {
           struct file_aux *f = &spt_entry->aux.file;
           unlink_shared_entry (f->file, f->ofs, spt_entry);

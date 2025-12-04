@@ -90,7 +90,9 @@ struct shared_entry *
 link_to_shared_entry (struct file *file, off_t offset,
                       struct spt_entry *spt_entry)
 {
-  ASSERT (!spt_entry->writable);
+  uint32_t *pd = thread_current()->process->pagedir;
+  bool writable = pagedir_is_writable (pd, spt_entry->upage);
+  ASSERT (!writable);
   ASSERT (get_page_status (spt_entry->upage) == SPT_SHARED);
 
   /* Atomically get shared entry and create it if it doesn't exist */
@@ -116,7 +118,9 @@ unlink_shared_entry (struct file *file, off_t offset,
                      struct spt_entry *spt_entry)
 {
   ASSERT (get_page_status (spt_entry->upage) == SPT_SHARED);
-  ASSERT (!spt_entry->writable);
+  uint32_t *pd = thread_current()->process->pagedir;
+  bool writable = pagedir_is_writable (pd, spt_entry->upage);
+  ASSERT (!writable);
   /* Unlink while holding a shared table lock to ensure that
      no other process links to the entry for given {file, offset}
      This allows to  */
