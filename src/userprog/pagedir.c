@@ -247,12 +247,13 @@ pagedir_set_writable (uint32_t *pd, const void *vpage, bool writable)
 
 uint8_t pagedir_get_avl (uint32_t *pd, const void *vpage) {
   uint32_t *pte = lookup_page (pd, vpage, false);
+  ASSERT (pte != NULL);
   uint8_t data = (*pte & PTE_AVL) >> AVLSHIFT;
   return data;
 }
 
 void pagedir_set_avl (uint32_t *pd, const void *vpage, uint8_t data) {
-  uint32_t *pte = lookup_page (pd, vpage, false);
+  uint32_t *pte = lookup_page (pd, vpage, true);
   ASSERT (data < MAX_AVL_SIZE); /* Data must be three bits */
   if (pte != NULL) 
     {

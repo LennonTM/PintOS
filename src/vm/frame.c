@@ -93,7 +93,8 @@ frame_evict (void)
 
     /* All frame owner(s) hold necessary information in the spt_entry */
     ASSERT (spt_entry != NULL);
-    switch (spt_entry->status) {
+    enum page_status status = get_page_status (spt_entry->upage);
+    switch (status) {
       case SPT_FILE:
         ASSERT (spt_entry->writable);
         /* If a file page is dirty, write it to the file */
@@ -116,7 +117,7 @@ frame_evict (void)
         /* Dirty exec/frame pages get swapped out */
         if (is_dirty) {
           size_t swap_index = swap_out(kpage);
-          spt_entry->status = SPT_SWAP;
+          set_page_status (spt_entry->upage, SPT_SWAP);
           spt_entry->aux.swap.index = swap_index;
         }
         break;

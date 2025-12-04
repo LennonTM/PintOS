@@ -162,22 +162,28 @@ page_fault (struct intr_frame *f)
     ASSERT (user || proc->recover_flag);
     struct spt_entry *spt_entry = spt_get_entry (&proc->spt, fault_page);
     if (spt_entry != NULL) {
+      enum page_status status = get_page_status (spt_entry->upage);
 
-      switch (spt_entry->status) {
+      switch (status) {
         case SPT_SWAP:
           spt_load_swap_page (spt_entry);
+          set_page_status (spt_entry->upage, SPT_FRAME);
           break;
         case SPT_FILE:
         case SPT_EXEC:
           /* Page is to be lazy-loaded from a file
              for both executable page and file page */
           spt_load_file_page (spt_entry);
+          set_page_status (spt_entry->upage, status);
           break;
         case SPT_SHARED:
           spt_load_shared_page (spt_entry);
+          set_page_status (spt_entry->upage, SPT_SHARED);
           break;
         case SPT_FRAME:
           PANIC ("FRAME page must always be present");
+        case SPT_INVALID:
+          PANIC ("Should never be faulted on");
       }
       return;
     }

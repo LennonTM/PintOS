@@ -18,5 +18,6 @@ void pagedir_set_writable (uint32_t *pd, const void *upage, bool writable);
 uint8_t pagedir_get_avl (uint32_t *pd, const void *upage);
 void pagedir_set_avl (uint32_t *pd, const void *upage, uint8_t data);
 void pagedir_activate (uint32_t *pd);
+bool pagedir_create_pte (uint32_t *pd, const void *vpage, bool writable);
 
 #endif /* userprog/pagedir.h */

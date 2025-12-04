@@ -9,6 +9,8 @@
 #include "userprog/pagedir.h"
 #include "devices/swap.h"
 
+#include <stdio.h>
+
 /* Hash function for SPT entries based on upage. */
 unsigned
 spt_hash (const struct hash_elem *p_, void *aux UNUSED)
@@ -40,7 +42,7 @@ spt_create_entry (struct hash *spt, uint8_t *upage, bool writable,
   }
   entry->upage = upage;
   entry->writable = writable;
-  entry->status = status;
+  set_page_status (upage, status);
   struct hash_elem *prev_elem = hash_insert (spt, &entry->elem);
   ASSERT (prev_elem == NULL);
   return entry;
@@ -107,7 +109,11 @@ spt_destroy_entry (struct hash_elem *e, void *aux UNUSED)
   bool is_dirty = pagedir_is_dirty (thread_current()->process->pagedir,
                                     spt_entry->upage);
 
-  switch (spt_entry->status) {
+  enum page_status status = get_page_status (spt_entry->upage);
+  switch (status) {
+    case SPT_INVALID:
+      PANIC("HEY!");
+      break;
     case SPT_FILE:
       if (is_dirty) {
         struct file_aux *f = &spt_entry->aux.file;
@@ -133,7 +139,7 @@ spt_destroy_entry (struct hash_elem *e, void *aux UNUSED)
       ASSERT (kpage != NULL);
       break;
   }
-  if (kpage != NULL) {
+  if (kpage != NULL && status != SPT_INVALID) {
     frame_free (kpage);
   }
   free (spt_entry); 
@@ -162,7 +168,7 @@ spt_load_swap_page (struct spt_entry *spt_entry)
                                       spt_entry->writable,
                                       spt_entry->aux.swap.index);
   if (success)
-    spt_entry->status = SPT_FRAME;
+    set_page_status (spt_entry->upage, SPT_FRAME);
   return success;
 }
 
@@ -183,6 +189,7 @@ spt_load_file_page (struct spt_entry *spt_entry)
 bool
 spt_load_shared_page (struct spt_entry *spt_entry)
 {
+  ASSERT(get_page_status(spt_entry->upage) == SPT_SHARED);
   ASSERT (!spt_entry->writable);
   struct file_aux *f = &spt_entry->aux.file;
 
@@ -225,9 +232,6 @@ enum page_status get_page_status (const void *upage) {
   uint32_t *pd = thread_current()->process->pagedir; 
   return pagedir_get_avl (pd, upage);
 }
-
-uint8_t pagedir_get_avl (uint32_t *pd, const void *upage);
-void pagedir_set_avl (uint32_t *pd, const void *upage, uint8_t data);
 
 void set_page_status (const void *upage, enum page_status status) {
   uint32_t *pd = thread_current()->process->pagedir;

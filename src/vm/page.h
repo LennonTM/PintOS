@@ -8,6 +8,7 @@
 #include "filesys/file.h"
 
 enum page_status {
+  SPT_INVALID, /* Default case for unset page status */
   SPT_SWAP,   /* Page is stored in swap space */
   SPT_FILE,   /* Writable page from a file */
   SPT_EXEC,   /* Writable executable page to be lazy-loaded */
@@ -33,7 +34,6 @@ union spt_entry_aux {
 struct spt_entry {
   void *upage;              /* User virtual address of the page. */
   bool writable;            /* True if page is writable. */
-  enum page_status status;  /* Where/how the page is stored. */
   union spt_entry_aux aux;  /* Status-specific metadata. */
   struct hash_elem elem;
 };
