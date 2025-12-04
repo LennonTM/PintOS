@@ -52,11 +52,9 @@ spt_record_file_page (struct hash *spt, struct file *file, off_t ofs,
   ASSERT (prev_elem == NULL);
 }
 
-/* Records the executable page starting at upage in spt. ofs is the offset 
-   within
-   the file. page_read_bytes is the number of bytes that can be read of the
-   file in the page, page_zero_bytes is the rest of the bytes in the page 
-   which are zero.*/
+/* Record executable page in SPT
+   if writable -> SPT_SHARED (read-only shared exec page)
+   otherwise   -> SPT_EXEC   (writable exec page to be lazy-loaded) */
 void
 spt_record_exec_page (struct hash *spt, struct file *file, off_t ofs,
                       uint8_t *upage, uint32_t page_read_bytes,
@@ -70,7 +68,7 @@ spt_record_exec_page (struct hash *spt, struct file *file, off_t ofs,
   }
   entry->upage = upage;
   entry->writable = writable;
-  entry->status = writable ? W_EXEC : FILE;
+  entry->status = writable ? SPT_EXEC : SPT_SHARED;
   entry->aux.file.file = file;
   entry->aux.file.ofs = ofs;
   entry->aux.file.page_read_bytes = page_read_bytes;
@@ -136,14 +134,16 @@ spt_destroy_entry (struct hash_elem *e, void *aux UNUSED)
 
   switch (spt_entry->status) {
     case FILE:
-      if (!spt_entry->writable && kpage != NULL) {
-        unlink_shared_entry (spt_entry->aux.file.file,
-                             spt_entry->aux.file.ofs,
-                             spt_entry);
-      }
-      else if (is_dirty) {
+      if (is_dirty) {
         struct file_aux *f = &spt_entry->aux.file;
         file_write_at (f->file, kpage, f->page_read_bytes, f->ofs);
+      }
+      break;
+    case SPT_SHARED:
+      if (kpage != NULL) {
+        unlink_shared_entry (spt_entry->aux.file.file,
+                              spt_entry->aux.file.ofs,
+                              spt_entry);
       }
       break;
     case SWAP:
@@ -152,7 +152,7 @@ spt_destroy_entry (struct hash_elem *e, void *aux UNUSED)
          so reclaim swap space by dropping the page */
       swap_drop (spt_entry->aux.swap.index);
       break;
-    case W_EXEC:
+    case SPT_EXEC:
       break;
     case FRAME:
       ASSERT (kpage != NULL);
@@ -178,6 +178,8 @@ spt_remove_entry (struct hash *spt, struct spt_entry *entry) {
   return removed_elem != NULL;
 }
 
+/* Load a writable page from a file
+   (all read-only pages are shared) */
 bool
 spt_load_file_page (struct spt_entry* spt_entry) {
   void *upage            = spt_entry->upage;
@@ -187,14 +189,30 @@ spt_load_file_page (struct spt_entry* spt_entry) {
   size_t page_read_bytes = spt_entry->aux.file.page_read_bytes;
   size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-  if (writable) {
-    uint8_t *kpage = load_page_from_file (file, offset, upage, page_read_bytes,
-                                          page_zero_bytes, writable);
-    if (kpage == NULL) {
-      return false;
-    }
-    return true;
+  ASSERT (writable);
+
+  uint8_t *kpage = load_page_from_file (file, offset, upage, page_read_bytes,
+                                        page_zero_bytes, writable);
+  if (kpage == NULL) {
+    return false;
   }
+  return true;
+}
+
+/* Load read-only shared page into memory
+   allocate new kpage if no other process managed
+   to load the page for this frame,
+   otherwise, link to the existing page */
+bool
+spt_load_shared_page (struct spt_entry* spt_entry) {
+  void *upage            = spt_entry->upage;
+  bool writable          = spt_entry->writable;
+  struct file *file      = spt_entry->aux.file.file;
+  off_t offset           = spt_entry->aux.file.ofs;
+  size_t page_read_bytes = spt_entry->aux.file.page_read_bytes;
+  size_t page_zero_bytes = PGSIZE - page_read_bytes;
+
+  ASSERT (!writable);
   /* Link the spt_entry to the shared_entry */
   struct shared_entry *shared_entry =
     link_to_shared_entry (file, offset, spt_entry);

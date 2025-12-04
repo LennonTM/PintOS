@@ -189,9 +189,13 @@ page_fault (struct intr_frame *f)
           }
           break;
         case FILE:
-        case W_EXEC:
-          /* Page is to be lazy-loaded from a file */
+        case SPT_EXEC:
+          /* Page is to be lazy-loaded from a file
+             for both executable page and file page */
           spt_load_file_page (spt_entry);
+          break;
+        case SPT_SHARED:
+          spt_load_shared_page (spt_entry);
           break;
       }
       lock_release(&frame_lock);

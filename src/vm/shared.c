@@ -90,7 +90,7 @@ link_to_shared_entry (struct file *file, off_t offset,
                       struct spt_entry *spt_entry)
 {
   ASSERT (!spt_entry->writable);
-  ASSERT (spt_entry->status == FILE);
+  ASSERT (spt_entry->status == SPT_SHARED);
 
   /* Atomically get shared entry and create it if it doesn't exist */
   lock_acquire (&shared_table_lock);
@@ -113,7 +113,7 @@ void
 unlink_shared_entry (struct file *file, off_t offset,
                      struct spt_entry *spt_entry)
 {
-  ASSERT (spt_entry->status == FILE && !spt_entry->writable);
+  ASSERT (spt_entry->status == SPT_SHARED && !spt_entry->writable);
   /* Unlink while holding a shared table lock to ensure that
      no other process links to the entry for given {file, offset}
      This allows to  */

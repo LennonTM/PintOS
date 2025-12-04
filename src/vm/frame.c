@@ -95,21 +95,23 @@ frame_evict (void) {
     if (spt_entry != NULL) {
       switch (spt_entry->status) {
         case FILE:
+          ASSERT (spt_entry->writable);
           /* If a file page is dirty, write it to the file */
           if (is_dirty) {
-            /* If file is denied writes, then file_write will not
-              modify the file, which is a desired behaviour */
             struct file_aux *f = &spt_entry->aux.file;
             file_write_at (f->file, kpage, f->page_read_bytes, f->ofs);
-          }
-          else if (!spt_entry->writable) {
-            struct file_aux *f = &spt_entry->aux.file;
-            unlink_shared_entry (f->file, f->ofs, spt_entry);
           }
           /* Otherwise the page is cleared from memory, but
              spt entry is kept to load it again later */
           break;
-        case W_EXEC:
+        case SPT_SHARED:
+          ASSERT (!spt_entry->writable);
+          {
+            struct file_aux *f = &spt_entry->aux.file;
+            unlink_shared_entry (f->file, f->ofs, spt_entry);
+          }
+          break;
+        case SPT_EXEC:
           if (is_dirty) {
             size_t swap_index = swap_out(kpage);
             spt_entry->status = SWAP;

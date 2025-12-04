@@ -12,8 +12,9 @@
 enum page_status {
   SWAP,
   FILE,
-  W_EXEC,
+  SPT_EXEC, /* Writable executable page to be lazy-loaded */
   FRAME,
+  SPT_SHARED, /* Shared read-only executable pages */
 };
 
 struct file_aux {
@@ -76,6 +77,7 @@ bool spt_remove_entry (struct hash *spt, struct spt_entry *entry);
 struct spt_entry *spt_get_entry (struct hash *spt, void *upage);
 void spt_destroy (struct hash *spt);
 bool spt_load_file_page (struct spt_entry* spt_entry);
+bool spt_load_shared_page (struct spt_entry* spt_entry);
 void spt_share_entry (struct spt_entry *spt_entry, struct list *shared_list);
 void spt_remove_page (void* upage);
 
