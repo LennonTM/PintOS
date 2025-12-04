@@ -734,22 +734,30 @@ validate_segment (const struct Elf32_Phdr *phdr, struct file *file)
   return true;
 }
 
+/* Finds a new page in memory and returns the kernel page allocated */
+static uint8_t * 
+load_page(enum palloc_flags flags, uint8_t *upage, bool writable) {
+    uint8_t *kpage = frame_alloc(flags);
+    if (kpage == NULL)
+        return NULL;
+
+    if (!frame_install_page(upage, kpage, writable)) {
+        frame_free(kpage);
+        return NULL;
+    }
+
+    return kpage;
+}
+
 
 /* Loads a page from swap space into memory. */
 uint8_t *
 load_page_from_swap (struct spt_entry *spt_entry)
 {
-  void *kpage = frame_alloc(PAL_USER); /* Allocate a new physical frame */
-  ASSERT (kpage != NULL);
-
-  if (!frame_install_page(spt_entry->upage,
-                          kpage,
-                          spt_entry->writable))
-  {
-    frame_free(kpage);
-    /* TODO: Kill process, not the OS */
-    PANIC("Swap in: Install page failed.");
-  }
+  uint8_t *kpage = load_page(PAL_USER, spt_entry->upage, spt_entry->writable);
+  if (kpage == NULL)
+    return NULL;
+  
   /* Read data from swap space into RAM */
   swap_in (kpage, spt_entry->aux.swap.index);
   /* Restore dirty bit since only dirty pages are written to swap */
@@ -778,17 +786,9 @@ load_page_from_file (struct file *file, off_t ofs, uint8_t *upage,
                      bool writable)
 {
   /* Get a new page of memory. */
-  uint8_t *kpage = frame_alloc (PAL_USER);
-  if (kpage == NULL){
+  uint8_t *kpage = load_page (PAL_USER, upage, writable);
+  if (kpage == NULL) 
     return NULL;
-  }
-
-  /* Add the page to the process's address space. */
-  if (!frame_install_page (upage, kpage, writable)) 
-  {
-    frame_free (kpage);
-    return NULL; 
-  }
 
   /* Load data into the page. */
   file_seek (file, ofs);
@@ -805,16 +805,7 @@ load_page_from_file (struct file *file, off_t ofs, uint8_t *upage,
 uint8_t *
 load_page_zeroing (uint8_t *upage, bool writable)
 {
-  uint8_t *kpage = frame_alloc(PAL_USER | PAL_ZERO);
-  if (kpage == NULL)
-    return NULL;
-
-  if (!frame_install_page(upage, kpage, writable)) {
-    frame_free(kpage);
-    return NULL;
-  }
-
-  return kpage;
+  return load_page(PAL_USER | PAL_ZERO, upage, writable);
 }
 
 /* Populates Supplementary page table of the process with
