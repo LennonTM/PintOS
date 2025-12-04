@@ -5,7 +5,6 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
-#include "userprog/process.h"
 #include "userprog/pagedir.h"
 #include "vm/page.h"
 #include "devices/swap.h"
@@ -166,7 +165,7 @@ page_fault (struct intr_frame *f)
 
       switch (spt_entry->status) {
         case SPT_SWAP:
-          load_page_from_swap (spt_entry);
+          spt_load_swap_page (spt_entry);
           break;
         case SPT_FILE:
         case SPT_EXEC:

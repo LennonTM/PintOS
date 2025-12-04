@@ -752,17 +752,16 @@ load_page(enum palloc_flags flags, uint8_t *upage, bool writable) {
 
 /* Loads a page from swap space into memory. */
 uint8_t *
-load_page_from_swap (struct spt_entry *spt_entry)
+load_page_from_swap (uint8_t *upage, bool writable, size_t index)
 {
-  uint8_t *kpage = load_page(PAL_USER, spt_entry->upage, spt_entry->writable);
+  uint8_t *kpage = load_page(PAL_USER, upage, writable);
   if (kpage == NULL)
     return NULL;
   
   /* Read data from swap space into RAM */
-  swap_in (kpage, spt_entry->aux.swap.index);
+  swap_in (kpage, index);
   /* Restore dirty bit since only dirty pages are written to swap */
-  pagedir_set_dirty (thread_current()->process->pagedir, spt_entry->upage, true);
-  spt_entry->status = SPT_FRAME;
+  pagedir_set_dirty (thread_current()->process->pagedir, upage, true);
   return kpage;
 }
 

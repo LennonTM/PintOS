@@ -156,6 +156,18 @@ spt_remove_entry (struct hash *spt, struct spt_entry *entry) {
 
 /* Loads a writable page from file into memory. */
 bool
+spt_load_swap_page (struct spt_entry *spt_entry)
+{
+  bool success = load_page_from_swap (spt_entry->upage,
+                              spt_entry->writable,
+                              spt_entry->aux.swap.index);
+  if (success)
+    spt_entry->status = SPT_FRAME;
+  return success;
+}
+
+/* Loads a writable page from file into memory. */
+bool
 spt_load_file_page (struct spt_entry *spt_entry)
 {
   ASSERT (spt_entry->writable);
