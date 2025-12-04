@@ -27,85 +27,65 @@ void *aux UNUSED)
   return a->upage < b->upage;                           
 }
 
-/* Records the file at page starting at upage in spt. ofs is the offset within
-   the file. page_read_bytes is the number of bytes that can be read of the
-   file in the page, page_zero_bytes is the rest of the bytes in the page 
-   which are zero.*/
+/* Allocates and inserts a new SPT entry into the hash table.
+   Returns the newly created entry. Panics if allocation fails. */
+static struct spt_entry *
+spt_create_entry (struct hash *spt, uint8_t *upage, bool writable,
+                  enum page_status status)
+{
+  struct spt_entry *entry =
+    (struct spt_entry *) malloc (sizeof (struct spt_entry));
+  if (entry == NULL) {
+    /* Kernel ran out of memory */
+    process_exit (PROC_ERR);
+  }
+  entry->upage = upage;
+  entry->writable = writable;
+  entry->status = status;
+  struct hash_elem *prev_elem = hash_insert (spt, &entry->elem);
+  ASSERT (prev_elem == NULL);
+  return entry;
+}
+
+/* Records the file at page starting at upage in spt. */
 void
 spt_record_file_page (struct hash *spt, struct file *file, off_t ofs,
                       uint8_t *upage, uint32_t page_read_bytes,
                       bool writable)
 {
-  struct spt_entry *entry = 
-    (struct spt_entry *) malloc (sizeof (struct spt_entry));
-  if (entry == NULL) {
-    /* Kernel ran out of memory */
-    process_exit (PROC_ERR);
-  }
-  entry->upage = upage;
-  entry->writable = writable;
-  entry->status = SPT_FILE;
+  struct spt_entry *entry = spt_create_entry (spt, upage, writable, SPT_FILE);
   entry->aux.file.file = file;
   entry->aux.file.ofs = ofs;
   entry->aux.file.page_read_bytes = page_read_bytes;
-  struct hash_elem* prev_elem = hash_insert (spt, &entry->elem);
-  ASSERT (prev_elem == NULL);
 }
 
-/* Record executable page in SPT
-   if writable -> SPT_SHARED (read-only shared exec page)
-   otherwise   -> SPT_EXEC   (writable exec page to be lazy-loaded) */
+/* Record executable page in SPT:
+   writable   -> SPT_EXEC   (writable exec page to be lazy-loaded)
+   !writable  -> SPT_SHARED (read-only shared exec page) */
 void
 spt_record_exec_page (struct hash *spt, struct file *file, off_t ofs,
                       uint8_t *upage, uint32_t page_read_bytes,
                       bool writable)
 {
-  struct spt_entry *entry = 
-    (struct spt_entry *) malloc (sizeof (struct spt_entry));
-  if (entry == NULL) {
-    /* Kernel ran out of memory */
-    process_exit (PROC_ERR);
-  }
-  entry->upage = upage;
-  entry->writable = writable;
-  entry->status = writable ? SPT_EXEC : SPT_SHARED;
+  enum page_status status = writable ? SPT_EXEC : SPT_SHARED;
+  struct spt_entry *entry = spt_create_entry (spt, upage, writable, status);
   entry->aux.file.file = file;
   entry->aux.file.ofs = ofs;
   entry->aux.file.page_read_bytes = page_read_bytes;
-  struct hash_elem* prev_elem = hash_insert (spt, &entry->elem);
-  ASSERT (prev_elem == NULL);
 }
 
 void
 spt_record_swap_page (struct hash *spt, uint8_t *upage, bool writable,
-                      size_t swap_index) {
-  struct spt_entry *entry =
-    (struct spt_entry *) malloc (sizeof (struct spt_entry));
-  if (entry == NULL) {
-    /* Kernel ran out of memory */
-    process_exit (PROC_ERR);
-  }
-  entry->upage = upage;
-  entry->writable = writable;
-  entry->status = SPT_SWAP;
+                      size_t swap_index)
+{
+  struct spt_entry *entry = spt_create_entry (spt, upage, writable, SPT_SWAP);
   entry->aux.swap.index = swap_index;
-  struct hash_elem* prev_elem = hash_insert (spt, &entry->elem);
-  ASSERT (prev_elem == NULL);
 }
 
 void
-spt_record_frame_page (struct hash *spt, uint8_t *upage, bool writable) {
-  struct spt_entry *entry =
-    (struct spt_entry *) malloc (sizeof (struct spt_entry));
-  if (entry == NULL) {
-    /* Kernel ran out of memory */
-    process_exit (PROC_ERR);
-  }
-  entry->upage = upage;
-  entry->writable = writable;
-  entry->status = SPT_FRAME;
-  struct hash_elem* prev_elem = hash_insert (spt, &entry->elem);
-  ASSERT (prev_elem == NULL);
+spt_record_frame_page (struct hash *spt, uint8_t *upage, bool writable)
+{
+  spt_create_entry (spt, upage, writable, SPT_FRAME);
 }
 
 /* Returns an address of an SPT entry
@@ -176,68 +156,54 @@ spt_remove_entry (struct hash *spt, struct spt_entry *entry) {
   return removed_elem != NULL;
 }
 
-/* Load a writable page from a file
-   (all read-only pages are shared) */
+/* Load a writable page from a file (all read-only pages are shared). */
 bool
-spt_load_file_page (struct spt_entry* spt_entry) {
-  void *upage            = spt_entry->upage;
-  bool writable          = spt_entry->writable;
-  struct file *file      = spt_entry->aux.file.file;
-  off_t offset           = spt_entry->aux.file.ofs;
-  size_t page_read_bytes = spt_entry->aux.file.page_read_bytes;
-  size_t page_zero_bytes = PGSIZE - page_read_bytes;
-
-  ASSERT (writable);
-
-  uint8_t *kpage = load_page_from_file (file, offset, upage, page_read_bytes,
-                                        page_zero_bytes, writable);
-  if (kpage == NULL) {
-    return false;
-  }
-  return true;
+spt_load_file_page (struct spt_entry *spt_entry)
+{
+  ASSERT (spt_entry->writable);
+  struct file_aux *f = &spt_entry->aux.file;
+  uint8_t *kpage = load_page_from_file (f->file, f->ofs, spt_entry->upage,
+                                        f->page_read_bytes,
+                                        PGSIZE - f->page_read_bytes,
+                                        spt_entry->writable);
+  return kpage != NULL;
 }
 
-/* Load read-only shared page into memory
-   allocate new kpage if no other process managed
-   to load the page for this frame,
-   otherwise, link to the existing page */
+/* Load read-only shared page into memory.
+   Allocate new kpage if no other process loaded the page yet,
+   otherwise link to the existing page. */
 bool
-spt_load_shared_page (struct spt_entry* spt_entry) {
-  void *upage            = spt_entry->upage;
-  bool writable          = spt_entry->writable;
-  struct file *file      = spt_entry->aux.file.file;
-  off_t offset           = spt_entry->aux.file.ofs;
-  size_t page_read_bytes = spt_entry->aux.file.page_read_bytes;
-  size_t page_zero_bytes = PGSIZE - page_read_bytes;
+spt_load_shared_page (struct spt_entry *spt_entry)
+{
+  ASSERT (!spt_entry->writable);
+  struct file_aux *f = &spt_entry->aux.file;
 
-  ASSERT (!writable);
   /* Link the spt_entry to the shared_entry */
   struct shared_entry *shared_entry =
-    link_to_shared_entry (file, offset, spt_entry);
-  if (shared_entry == NULL) {
+    link_to_shared_entry (f->file, f->ofs, spt_entry);
+  if (shared_entry == NULL)
     return false;
-  }
+
   /* Atomically load the page */
   lock_acquire (&shared_entry->lock);
   uint8_t *kpage = shared_entry->kpage;
-  /* Load new page */
   if (kpage == NULL) {
-    kpage = load_page_from_file (file, offset, upage, page_read_bytes,
-                                 page_zero_bytes, writable);
-    /* If load failed */
+    /* Load new page */
+    kpage = load_page_from_file (f->file, f->ofs, spt_entry->upage,
+                                 f->page_read_bytes,
+                                 PGSIZE - f->page_read_bytes,
+                                 spt_entry->writable);
     if (kpage == NULL) {
       lock_release (&shared_entry->lock);
-      unlink_shared_entry (file, offset, spt_entry);
+      unlink_shared_entry (f->file, f->ofs, spt_entry);
       return false;
     }
     shared_entry->kpage = kpage;
-  }
-  else {
+  } else {
     /* Install an existing page */
-    frame_install_page (spt_entry->upage, kpage, writable);
+    frame_install_page (spt_entry->upage, kpage, spt_entry->writable);
   }
   lock_release (&shared_entry->lock);
-
   return true;
 }
 
