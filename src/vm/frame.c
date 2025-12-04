@@ -112,6 +112,8 @@ frame_evict (void) {
           }
           break;
         case SPT_EXEC:
+        case SPT_FRAME:
+          /* Dirty exec/frame pages get swapped out */
           if (is_dirty) {
             size_t swap_index = swap_out(kpage);
             spt_entry->status = SPT_SWAP;
@@ -120,12 +122,6 @@ frame_evict (void) {
           break;
         case SPT_SWAP:
           PANIC ("SWAP page must not be mapped");
-        case SPT_FRAME:
-          if (is_dirty) {
-            size_t swap_index = swap_out(kpage);
-            spt_entry->status = SPT_SWAP;
-            spt_entry->aux.swap.index = swap_index;
-          }
       }
     }
     else if (is_dirty) {
