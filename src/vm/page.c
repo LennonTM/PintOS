@@ -112,15 +112,6 @@ spt_record_frame_page (struct hash *spt, uint8_t *upage, bool writable,
   ASSERT (prev_elem == NULL);
 }
 
-/* Removes provided entry from the SPT
-   returns true if entry was removed successfully */
-bool 
-spt_remove_entry (struct hash *spt, struct spt_entry *entry) {
-  struct hash_elem *removed_elem = hash_delete (spt, &entry->elem);
-  free (entry);
-  return removed_elem != NULL;
-}
-
 /* Returns an address of an SPT entry
    corresponding to provided user vaddr of the page 
    NULL if not entry exists */
@@ -140,12 +131,19 @@ spt_destroy_entry (struct hash_elem *e, void *aux UNUSED)
   struct spt_entry *spt_entry = hash_entry (e, struct spt_entry, elem);
   void *kpage = pagedir_get_page(thread_current()->process->pagedir,
                                  spt_entry->upage);
+  bool is_dirty = pagedir_is_dirty (thread_current()->process->pagedir,
+                                    spt_entry->upage);
+
   switch (spt_entry->status) {
     case FILE:
       if (!spt_entry->writable && kpage != NULL) {
         unlink_shared_entry (spt_entry->aux.file.file,
                              spt_entry->aux.file.ofs,
                              spt_entry);
+      }
+      else if (is_dirty) {
+        struct file_aux *f = &spt_entry->aux.file;
+        file_write_at (f->file, kpage, f->page_read_bytes, f->ofs);
       }
       break;
     case SWAP:
@@ -169,6 +167,15 @@ spt_destroy_entry (struct hash_elem *e, void *aux UNUSED)
 void
 spt_destroy (struct hash *spt) {
   hash_destroy (spt, spt_destroy_entry);
+}
+
+/* Removes provided entry from the SPT
+   returns true if entry was removed successfully */
+bool 
+spt_remove_entry (struct hash *spt, struct spt_entry *entry) {
+  struct hash_elem *removed_elem = hash_delete (spt, &entry->elem);
+  spt_destroy_entry (&entry->elem, NULL);
+  return removed_elem != NULL;
 }
 
 bool

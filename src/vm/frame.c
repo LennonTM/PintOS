@@ -209,15 +209,18 @@ frame_free (void *kpage) {
     e = list_next(e);
   }
 
-  if (found_owner != NULL) {
-    list_remove(&found_owner->elem);
-    free(found_owner);
+  ASSERT (found_owner != NULL);
+
+  list_remove(&found_owner->elem);
+ 
+  /* If the frame is no longer referred to by any other process
+     Free the page and clear the PTE to avoid repeated clear */
+  if (list_empty(&frame->owners)) {
+    pagedir_clear_page (found_owner->process->pagedir, found_owner->upage);
+    palloc_free_page (kpage);
   }
-  
-  /* Let freeing the pages be handled by pagedir_destroy */
-  // if (list_empty(&frame->owners)) {
-  //   palloc_free_page(kpage);
-  // }
+
+  free(found_owner);
 
   if (!lock_held) lock_release(&frame_lock);
 }

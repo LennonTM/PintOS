@@ -6,6 +6,7 @@
 #include "threads/thread.h"
 #include "userprog/fd_table.h"
 #include "threads/malloc.h"
+#include "threads/palloc.h"
 
 void mmap_table_init (struct mmap_table* mmap_table) {
     list_init (&mmap_table->list);
@@ -82,25 +83,13 @@ void mmap_increment_pages_no(struct mmap_table* mmap_table, mapid_t mapping) {
 void mmap_free_entry(struct mmap_entry * entry) {
     ASSERT(entry != NULL);
 
-    uint32_t *pagedir = thread_current()->process->pagedir;
     void* upage = entry->upage;
-    
-    int offset = 0;
+
     for (int i = 0; i < entry->no_pages; i++) {
-        /* There are two cases either the page wasnt loaded or it was,
-           if it wasn't loaded it is in SPT, otherwise it resides in page
-           table */
-        if (pagedir_get_page(pagedir, upage) == NULL) {
-            spt_remove_page(upage);
-        }
-        else {
-            if (pagedir_is_dirty(pagedir, upage)) {
-                file_write_at(entry->file, upage, PGSIZE, offset);
-            }          
-            pagedir_clear_page(pagedir, upage);
-        }  
+        /* Remove page from SPT, which communicates
+           the change to frame table to free the page */
+        spt_remove_page (upage);
         upage += PGSIZE;
-        offset += PGSIZE;
     }
     list_remove(&entry->elem);
     free(entry);
