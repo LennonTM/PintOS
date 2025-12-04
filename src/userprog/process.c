@@ -444,7 +444,7 @@ process_exit (int exit_code)
 
       free_fd_table (&cur->fd_table);
       
-      free_mmap_table (&cur->mmap_table);
+      mmap_table_destroy (&cur->mmap_table);
 
       spt_destroy (&cur->spt);
 

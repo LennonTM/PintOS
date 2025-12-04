@@ -8,89 +8,90 @@
 #include "threads/malloc.h"
 #include "threads/palloc.h"
 
-void mmap_table_init (struct mmap_table* mmap_table) {
-    list_init (&mmap_table->list);
-}
-void free_mmap_table(struct mmap_table* mmap_table) {
-    struct list* list = &mmap_table->list;
-    /* Iterates through the mmap_table of the current process,
-       removing the pages of each mapping and removing the mapping struct
-       from the table.*/
-    struct list_elem *e = list_begin (list); 
-    while (e != list_end (list)) {
-        struct mmap_entry *entry = list_entry (e, struct mmap_entry, elem);
-        ASSERT (entry != NULL);
-        /* Remove list_elem from the list before freeing the entry */
-        e = list_remove (e);
-        mmap_free_entry(entry);
-    }
+/* Initializes an mmap table. */
+void
+mmap_table_init (struct mmap_table *mmap_table)
+{
+  list_init (&mmap_table->list);
 }
 
+/* Destroys all mappings in the table and frees resources. */
+void
+mmap_table_destroy (struct mmap_table *mmap_table)
+{
+  struct list *list = &mmap_table->list;
+  struct list_elem *e = list_begin (list);
+  while (e != list_end (list)) {
+    struct mmap_entry *entry = list_entry (e, struct mmap_entry, elem);
+    ASSERT (entry != NULL);
+    /* Remove list_elem from the list before freeing the entry */
+    e = list_remove (e);
+    mmap_free_entry (entry);
+  }
+}
+
+/* Returns next available map ID. */
 static mapid_t
-get_next_mapid (struct mmap_table* mmap_table) {
-  struct list* list = &mmap_table->list;
+get_next_mapid (struct mmap_table *mmap_table)
+{
+  struct list *list = &mmap_table->list;
   /* As an invariant the last element in mmap_table has the largest id thus
      we choose the next id as this should not have been chosen already. The 
      first id is 0. */
-  int id = list_empty (list) ? FIRST_MAP_ID :
-    list_entry(list_back(list), struct mmap_entry, elem)->id + 1;
+  if (list_empty (list))
+    return FIRST_MAP_ID;
+  return list_entry (list_back (list), struct mmap_entry, elem)->id + 1;
+}
+
+/* Returns mmap entry with given ID, or NULL if not found. */
+struct mmap_entry *
+mmap_get_entry (struct mmap_table *mmap_table, mapid_t id)
+{
+  if (id < FIRST_MAP_ID)
+    return NULL;
+  for (struct list_elem *e = list_begin (&mmap_table->list);
+       e != list_end (&mmap_table->list);
+       e = list_next (e)) {
+    struct mmap_entry *entry = list_entry (e, struct mmap_entry, elem);
+    if (entry->id == id)
+      return entry;
+  }
+  return NULL;
+}
+
+/* Creates a new mapping entry and returns its ID. */
+mapid_t
+mmap_new_entry (struct mmap_table *mmap_table, void *upage, struct file *file)
+{
+  struct list *list = &mmap_table->list;
+  mapid_t id = get_next_mapid (mmap_table);
+  struct mmap_entry *entry = malloc (sizeof (struct mmap_entry));
+  entry->id = id;
+  entry->no_pages = 0;
+  entry->upage = upage;
+  entry->file = file;
+  list_push_back (list, &entry->elem);
   return id;
 }
 
-/* Performs a linear search for entry with id of mapping. */
-struct mmap_entry* mmap_get_entry(struct mmap_table* mmap_table, mapid_t mapping) {
-    if (mapping < FIRST_MAP_ID) {
-        return NULL;
-    }
-    for (
-        struct list_elem *e = list_begin(&mmap_table->list); 
-        e!= list_end(&mmap_table->list); 
-        e = list_next(e)
-    ) {
-        struct mmap_entry * entry = list_entry (e, struct mmap_entry, elem);
-        if (entry->id == mapping) {
-            return entry;
-        }
-    }
-    return NULL;
+/* Increments page count for the given mapping. */
+void
+mmap_increment_pages (struct mmap_table *mmap_table, mapid_t id)
+{
+  struct mmap_entry *entry = mmap_get_entry (mmap_table, id);
+  entry->no_pages++;
 }
 
-/* Creates new entry in table with a single page*/
-mapid_t mmap_new_entry (
-    struct mmap_table* mmap_table, 
-    void* upage, 
-    struct file* file
-) {
-    struct list* list = &mmap_table->list;
-    int id = get_next_mapid (mmap_table);
-    struct mmap_entry* entry = malloc (sizeof(struct mmap_entry));
-    entry->id = id;
-    entry->no_pages = 0;
-    entry->upage = upage;
-    entry->file = file;
-    list_push_back(list ,&entry->elem);
-    return id;
-}
-
-/* Adds another page to the mapping by incrementing page_no */
-void mmap_increment_pages_no(struct mmap_table* mmap_table, mapid_t mapping) {
-    struct mmap_entry * entry = mmap_get_entry(mmap_table, mapping);
-    entry->no_pages++;   
-}
-/* Iterates through the pages mapped in entry, removes them from the 
-   SPT table/page table and removes/frees the entry in the mmap_table. 
-   Performs write backs to file if page is dirty. */
-void mmap_free_entry(struct mmap_entry * entry) {
-    ASSERT(entry != NULL);
-
-    void* upage = entry->upage;
-
-    for (int i = 0; i < entry->no_pages; i++) {
-        /* Remove page from SPT, which communicates
-           the change to frame table to free the page */
-        spt_remove_page (upage);
-        upage += PGSIZE;
-    }
-    list_remove(&entry->elem);
-    free(entry);
+/* Unmaps all pages and frees the mapping entry. */
+void
+mmap_free_entry (struct mmap_entry *entry)
+{
+  ASSERT (entry != NULL);
+  void *upage = entry->upage;
+  for (int i = 0; i < entry->no_pages; i++) {
+    spt_remove_page (upage);
+    upage += PGSIZE;
+  }
+  list_remove (&entry->elem);
+  free (entry);
 }
