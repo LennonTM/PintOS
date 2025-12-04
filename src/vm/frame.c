@@ -91,44 +91,37 @@ frame_evict (void)
     
     bool is_dirty = pagedir_is_dirty(owner->process->pagedir, owner->upage);
 
+    /* All frame owner(s) hold necessary information in the spt_entry */
     ASSERT (spt_entry != NULL);
-    if (spt_entry != NULL) {
-      switch (spt_entry->status) {
-        case SPT_FILE:
-          ASSERT (spt_entry->writable);
-          /* If a file page is dirty, write it to the file */
-          if (is_dirty) {
-            struct file_aux *f = &spt_entry->aux.file;
-            file_write_at (f->file, kpage, f->page_read_bytes, f->ofs);
-          }
-          /* Otherwise the page is cleared from memory, but
-             spt entry is kept to load it again later */
-          break;
-        case SPT_SHARED:
-          ASSERT (!spt_entry->writable);
-          {
-            struct file_aux *f = &spt_entry->aux.file;
-            unlink_shared_entry (f->file, f->ofs, spt_entry);
-          }
-          break;
-        case SPT_EXEC:
-        case SPT_FRAME:
-          /* Dirty exec/frame pages get swapped out */
-          if (is_dirty) {
-            size_t swap_index = swap_out(kpage);
-            spt_entry->status = SPT_SWAP;
-            spt_entry->aux.swap.index = swap_index;
-          }
-          break;
-        case SPT_SWAP:
-          PANIC ("SWAP page must not be mapped");
-      }
-    }
-    else if (is_dirty) {
-      /* Otherwise, the page is a stack page */
-      size_t swap_index = swap_out(kpage);
-      spt_record_swap_page (&owner->process->spt, owner->upage,
-                            true, swap_index);
+    switch (spt_entry->status) {
+      case SPT_FILE:
+        ASSERT (spt_entry->writable);
+        /* If a file page is dirty, write it to the file */
+        if (is_dirty) {
+          struct file_aux *f = &spt_entry->aux.file;
+          file_write_at (f->file, kpage, f->page_read_bytes, f->ofs);
+        }
+        /* Otherwise the page is cleared from memory, but
+            spt entry is kept to load it again later */
+        break;
+      case SPT_SHARED:
+        ASSERT (!spt_entry->writable);
+        {
+          struct file_aux *f = &spt_entry->aux.file;
+          unlink_shared_entry (f->file, f->ofs, spt_entry);
+        }
+        break;
+      case SPT_EXEC:
+      case SPT_FRAME:
+        /* Dirty exec/frame pages get swapped out */
+        if (is_dirty) {
+          size_t swap_index = swap_out(kpage);
+          spt_entry->status = SPT_SWAP;
+          spt_entry->aux.swap.index = swap_index;
+        }
+        break;
+      case SPT_SWAP:
+        PANIC ("SWAP page must not be mapped");
     }
 
     /* Get the next element before freeing the owner */
