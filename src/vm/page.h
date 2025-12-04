@@ -27,16 +27,11 @@ struct swap_aux {
   size_t index; /* Index within the swap disk. */
 };
 
-struct frame_aux {
-  void *kpage; /* Kernel virtual address of the frame */
-};
-
 /* We use a union to reduce size of struct when using mutually exclusive
    meta data between different locations page could be stored. */
 union spt_entry_aux {
   struct file_aux file;
   struct swap_aux swap;
-  struct frame_aux frame;
 };
 
 /* Entry to the Supplementary Page Table. */

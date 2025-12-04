@@ -105,7 +105,6 @@ spt_record_frame_page (struct hash *spt, uint8_t *upage, bool writable,
   entry->upage = upage;
   entry->writable = writable;
   entry->status = FRAME;
-  entry->aux.frame.kpage = kpage;
   struct hash_elem* prev_elem = hash_insert (spt, &entry->elem);
   ASSERT (prev_elem == NULL);
 }

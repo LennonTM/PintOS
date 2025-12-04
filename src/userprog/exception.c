@@ -185,7 +185,6 @@ page_fault (struct intr_frame *f)
             /* Restore dirty bit since only dirty pages are written to swap */
             pagedir_set_dirty (proc->pagedir, spt_entry->upage, true);
             spt_entry->status = FRAME;
-            spt_entry->aux.frame.kpage = kpage;
           }
           break;
         case FILE:
@@ -197,6 +196,8 @@ page_fault (struct intr_frame *f)
         case SPT_SHARED:
           spt_load_shared_page (spt_entry);
           break;
+        case FRAME:
+          PANIC ("FRAME page must always be present");
       }
       lock_release(&frame_lock);
       return;
