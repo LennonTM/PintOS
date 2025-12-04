@@ -88,9 +88,8 @@ void process_exit (int) NO_RETURN;
 void process_activate (void);
 
 uint8_t *load_page_from_swap (uint8_t *upage, bool writable, size_t index);
-uint8_t *load_page_from_file (struct file *file, off_t ofs, uint8_t *upage,
-                              uint32_t page_read_bytes,
-                              uint32_t page_zero_bytes, bool writable);
+uint8_t *load_page_from_file (uint8_t *upage, bool writable, struct file *file, 
+                              off_t ofs, uint32_t page_read_bytes);
 uint8_t *load_page_zeroing (uint8_t *upage, bool writable);
 bool install_page (void *upage, void *kpage, bool writable);
 void uninstall_page (void *upage);

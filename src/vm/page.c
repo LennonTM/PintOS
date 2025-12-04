@@ -159,24 +159,24 @@ bool
 spt_load_swap_page (struct spt_entry *spt_entry)
 {
   bool success = load_page_from_swap (spt_entry->upage,
-                              spt_entry->writable,
-                              spt_entry->aux.swap.index);
+                                      spt_entry->writable,
+                                      spt_entry->aux.swap.index);
   if (success)
     spt_entry->status = SPT_FRAME;
   return success;
 }
 
 /* Loads a writable page from file into memory. */
-bool
+uint8_t *
 spt_load_file_page (struct spt_entry *spt_entry)
 {
-  ASSERT (spt_entry->writable);
   struct file_aux *f = &spt_entry->aux.file;
-  uint8_t *kpage = load_page_from_file (f->file, f->ofs, spt_entry->upage,
-                                        f->page_read_bytes,
-                                        PGSIZE - f->page_read_bytes,
-                                        spt_entry->writable);
-  return kpage != NULL;
+  uint8_t *kpage = load_page_from_file (spt_entry->upage,
+                                        spt_entry->writable,
+                                        f->file, 
+                                        f->ofs,
+                                        f->page_read_bytes);
+  return kpage;
 }
 
 /* Loads a shared read-only page, reusing existing frame if available. */
@@ -197,10 +197,7 @@ spt_load_shared_page (struct spt_entry *spt_entry)
   uint8_t *kpage = shared_entry->kpage;
   if (kpage == NULL) {
     /* Load new page */
-    kpage = load_page_from_file (f->file, f->ofs, spt_entry->upage,
-                                 f->page_read_bytes,
-                                 PGSIZE - f->page_read_bytes,
-                                 spt_entry->writable);
+    kpage = spt_load_file_page(spt_entry);
     if (kpage == NULL) {
       lock_release (&shared_entry->lock);
       unlink_shared_entry (f->file, f->ofs, spt_entry);

@@ -780,9 +780,8 @@ load_page_from_swap (uint8_t *upage, bool writable, size_t index)
    If successful, returns kernel virtual address of the frame assigned,
    If a memory allocation error or disk read error occurs, return NULL. */
 uint8_t *
-load_page_from_file (struct file *file, off_t ofs, uint8_t *upage,
-                     uint32_t page_read_bytes, uint32_t page_zero_bytes,
-                     bool writable)
+load_page_from_file (uint8_t *upage, bool writable,
+                     struct file *file, off_t ofs, uint32_t page_read_bytes)
 {
   /* Get a new page of memory. */
   uint8_t *kpage = load_page (PAL_USER, upage, writable);
@@ -794,6 +793,7 @@ load_page_from_file (struct file *file, off_t ofs, uint8_t *upage,
   if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes){
     return NULL; 
   }
+  uint32_t page_zero_bytes = PGSIZE - page_read_bytes;
   memset (kpage + page_read_bytes, 0, page_zero_bytes);
 
   return kpage;

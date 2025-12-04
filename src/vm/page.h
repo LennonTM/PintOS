@@ -56,7 +56,7 @@ struct spt_entry *spt_get_entry (struct hash *spt, void *upage);
 void spt_destroy (struct hash *spt);
 
 bool spt_load_swap_page (struct spt_entry *spt_entry);
-bool spt_load_file_page (struct spt_entry *spt_entry);
+uint8_t *spt_load_file_page (struct spt_entry *spt_entry);
 bool spt_load_shared_page (struct spt_entry *spt_entry);
 void spt_remove_page (void *upage);
 
