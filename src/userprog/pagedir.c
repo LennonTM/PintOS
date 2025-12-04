@@ -6,6 +6,11 @@
 #include "threads/pte.h"
 #include "threads/palloc.h"
 #include "vm/frame.h"
+#include "vm/page.h"
+#include "devices/swap.h"
+
+#define AVLSHIFT 9
+#define MAX_AVL_SIZE 0x8 /* b1000 */
 
 static uint32_t *active_pd (void);
 static void invalidate_pagedir (uint32_t *);
@@ -40,9 +45,21 @@ pagedir_destroy (uint32_t *pd)
         uint32_t *pt = pde_get_pt (*pde);
         uint32_t *pte;
         
-        for (pte = pt; pte < pt + PGSIZE / sizeof *pte; pte++)
-          if (*pte & PTE_P) 
-            palloc_free_page (pte_get_page (*pte));
+        for (pte = pt; pte < pt + PGSIZE / sizeof *pte; pte++) {
+          /* Clean up FRAME and SWAP pages */
+          enum page_status status = (*pte & PTE_AVL) >> AVLSHIFT;
+          switch (status) {
+            case SPT_SWAP:
+              swap_drop (*pte >> SWAPBITS);
+              break;
+            case SPT_FRAME:
+              ASSERT (*pte & PTE_P);
+              frame_free (pte_get_page (*pte));
+              break;
+            default:
+              break;
+          }
+        }
         palloc_free_page (pt);
       }
   palloc_free_page (pd);
@@ -113,6 +130,37 @@ pagedir_set_page (uint32_t *pd, void *upage, void *kpage, bool writable)
     {
       ASSERT ((*pte & PTE_P) == 0);
       *pte = pte_create_user (kpage, writable);
+      return true;
+    }
+  else
+    return false;
+}
+
+size_t 
+pagedir_get_swap (uint32_t *pd, void *upage)
+{
+  uint32_t *pte = lookup_page (pd, upage, false);
+  ASSERT(pte != NULL);
+  return *pte >> SWAPSHIFT;
+}
+
+bool
+pagedir_set_swap (uint32_t *pd, void *upage, size_t swap_slot)
+{
+  uint32_t *pte;
+
+  ASSERT (pg_ofs (upage) == 0);
+  ASSERT (is_user_vaddr (upage));
+  ASSERT (pd != init_page_dir);
+  ASSERT (swap_slot < SWAP_INDEX_LIMIT);
+
+  pte = lookup_page (pd, upage, true);
+
+  if (pte != NULL) 
+    {
+      ASSERT ((*pte & PTE_P) == 0);
+      *pte = pte_create_swap (swap_slot);
+      pagedir_set_avl(pd, upage, SPT_SWAP);
       return true;
     }
   else
@@ -242,12 +290,11 @@ pagedir_set_writable (uint32_t *pd, const void *vpage, bool writable)
     }
 }
 
-#define AVLSHIFT 9
-#define MAX_AVL_SIZE 0x8 /* b1000 */
-
 uint8_t pagedir_get_avl (uint32_t *pd, const void *vpage) {
   uint32_t *pte = lookup_page (pd, vpage, false);
-  ASSERT (pte != NULL);
+  if (pte == NULL) {
+    return SPT_INVALID;
+  }
   uint8_t data = (*pte & PTE_AVL) >> AVLSHIFT;
   return data;
 }

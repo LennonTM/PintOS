@@ -28,6 +28,10 @@
 #define PDBITS  10                         /* Number of page dir bits. */
 #define PDMASK  BITMASK(PDSHIFT, PDBITS)   /* Page directory bits (22:31). */
 
+#define SWAPSHIFT 12 /* Number of bits shifted to store the swap index */
+#define SWAPBITS 20
+#define SWAP_INDEX_LIMIT (1 << (SWAPBITS + 1))
+
 /* Obtains page table index from a virtual address. */
 static inline unsigned pt_no (const void *va) {
   return ((uintptr_t) va & PTMASK) >> PTSHIFT;
@@ -95,6 +99,14 @@ static inline uint32_t pte_create_kernel (void *page, bool writable) {
    The page will be usable by both user and kernel code. */
 static inline uint32_t pte_create_user (void *page, bool writable) {
   return pte_create_kernel (page, writable) | PTE_U;
+}
+
+/* Returns a PTE that holds the index of a swap slot.
+   The PTE's page is readable.
+   If WRITABLE is true then it will be writable as well.
+   The page will be usable by both user and kernel code. */
+static inline uint32_t pte_create_swap (size_t index) {
+  return index << SWAPSHIFT | PTE_U | PTE_W;
 }
 
 /* Returns a pointer to the page that page table entry PTE points

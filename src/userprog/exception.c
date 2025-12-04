@@ -160,33 +160,32 @@ page_fault (struct intr_frame *f)
   if (not_present) {
     /* Check via SPT */
     ASSERT (user || proc->recover_flag);
+    
     struct spt_entry *spt_entry = spt_get_entry (&proc->spt, fault_page);
-    if (spt_entry != NULL) {
-      enum page_status status = get_page_status (spt_entry->upage);
+    enum page_status status = get_page_status (fault_page);
 
-      switch (status) {
-        case SPT_SWAP:
-          spt_load_swap_page (spt_entry);
-          set_page_status (spt_entry->upage, SPT_FRAME);
-          break;
-        case SPT_FILE:
-        case SPT_EXEC:
-          /* Page is to be lazy-loaded from a file
-             for both executable page and file page */
-          spt_load_file_page (spt_entry);
-          set_page_status (spt_entry->upage, status);
-          break;
-        case SPT_SHARED:
-          spt_load_shared_page (spt_entry);
-          set_page_status (spt_entry->upage, SPT_SHARED);
-          break;
-        case SPT_FRAME:
-          PANIC ("FRAME page must always be present");
-        case SPT_INVALID:
-          PANIC ("Should never be faulted on");
-      }
-      return;
+    switch (status) {
+      case SPT_INVALID:
+        break;
+      case SPT_SWAP:
+        spt_load_swap_page (fault_page);
+        set_page_status (fault_page, SPT_FRAME);
+        return;
+      case SPT_FILE:
+      case SPT_EXEC:
+        /* Page is to be lazy-loaded from a file
+            for both executable page and file page */
+        spt_load_file_page (spt_entry);
+        set_page_status (fault_page, status);
+        return;
+      case SPT_SHARED:
+        spt_load_shared_page (spt_entry);
+        set_page_status (fault_page, SPT_SHARED);
+        return;
+      case SPT_FRAME:
+        PANIC ("FRAME page must always be present");
     }
+  
 
     /* Check for stack growth */
     void *esp = user ? f->esp : proc->esp;
@@ -206,7 +205,7 @@ page_fault (struct intr_frame *f)
         process_exit (PROC_ERR);
       }
       /* Successfully grew the stack */
-      spt_record_frame_page (&proc->spt, fault_page, true);
+      set_page_status (fault_page, SPT_FRAME);
       return;
     }
   }
