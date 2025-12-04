@@ -15,7 +15,7 @@
 
 /* Lock prevents race conditions when accessing the frame table
 for allocation and eviction */
-struct lock frame_lock;
+static struct lock frame_lock;
 
 /* Used to iterate through frame table to find a 
 victim frame to evict */
@@ -150,14 +150,7 @@ frame_alloc (enum palloc_flags flags) {
   /* Frame table is maintained only for user frames */
   ASSERT (flags & PAL_USER);
 
-  bool lock_held = lock_held_by_current_thread(&frame_lock);
-
-  /* page_fault aquires the lock to safely read the SPT status.
-  frame_alloc must check that the thread does not already hold
-  the lock before trying to aquire it to prevent a deadlock.
-  When the thread holds the lock, we can safely modify the
-  global Frame Table. */
-  if(!lock_held) lock_acquire(&frame_lock);
+  lock_acquire(&frame_lock);
 
   /* Attempts to allocate a page from user pool */
   void *kpage = palloc_get_page (flags);
@@ -179,7 +172,7 @@ frame_alloc (enum palloc_flags flags) {
   frame->pinned = false;
   list_init (&frame->owners);
 
-  if (!lock_held) lock_release(&frame_lock);
+  lock_release(&frame_lock);
   return kpage;   
 }
 
@@ -187,8 +180,7 @@ frame_alloc (enum palloc_flags flags) {
    the corresponding frame_table_entry will be unused after */
 void
 frame_free (void *kpage) {
-  bool lock_held = lock_held_by_current_thread(&frame_lock);
-  if (!lock_held) lock_acquire(&frame_lock);
+  lock_acquire(&frame_lock);
 
   size_t frame_index = get_page_index(kpage);
   ASSERT(frame_index < get_user_pages());
@@ -220,7 +212,7 @@ frame_free (void *kpage) {
 
   free(found_owner);
 
-  if (!lock_held) lock_release(&frame_lock);
+  lock_release(&frame_lock);
 }
 
 /* Maps user virtual address UPAGE to a frame at KPAGE
@@ -240,14 +232,13 @@ frame_install_page(void *upage, void *kpage, bool writable) {
   owner->upage = upage;
   owner->process = thread_current()->process;
 
-  bool lock_held = lock_held_by_current_thread(&frame_lock);
-  if (!lock_held) lock_acquire(&frame_lock);
+  lock_acquire(&frame_lock);
 
   /* The frame must have been allocated before any calls to install */
   size_t frame_index = get_page_index(kpage);
   struct frame_table_entry *frame = &frame_table[frame_index];
   list_push_front (&frame->owners, &owner->elem);
   
-  if (!lock_held) lock_release(&frame_lock);
+  lock_release(&frame_lock);
   return true;
 }

@@ -163,8 +163,6 @@ page_fault (struct intr_frame *f)
     ASSERT (user || proc->recover_flag);
     struct spt_entry *spt_entry = spt_get_entry (&proc->spt, fault_page);
     if (spt_entry != NULL) {
-      /* Aquire lock to ensure consistency in SPT status */
-      lock_acquire(&frame_lock);
 
       switch (spt_entry->status) {
         case SPT_SWAP:
@@ -199,7 +197,6 @@ page_fault (struct intr_frame *f)
         case SPT_FRAME:
           PANIC ("FRAME page must always be present");
       }
-      lock_release(&frame_lock);
       return;
     }
 
