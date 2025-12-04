@@ -42,8 +42,8 @@ spt_create_entry (struct hash *spt, uint8_t *upage, bool writable,
   }
   entry->upage = upage;
   uint32_t *pd = thread_current()->process->pagedir;
-  pagedir_set_writable (pd, upage, writable);
   set_page_status (upage, status);
+  pagedir_set_writable (pd, upage, writable);
   struct hash_elem *prev_elem = hash_insert (spt, &entry->elem);
   ASSERT (prev_elem == NULL);
   return entry;
