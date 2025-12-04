@@ -44,7 +44,7 @@ spt_record_file_page (struct hash *spt, struct file *file, off_t ofs,
   }
   entry->upage = upage;
   entry->writable = writable;
-  entry->status = FILE;
+  entry->status = SPT_FILE;
   entry->aux.file.file = file;
   entry->aux.file.ofs = ofs;
   entry->aux.file.page_read_bytes = page_read_bytes;
@@ -87,7 +87,7 @@ spt_record_swap_page (struct hash *spt, uint8_t *upage, bool writable,
   }
   entry->upage = upage;
   entry->writable = writable;
-  entry->status = SWAP;
+  entry->status = SPT_SWAP;
   entry->aux.swap.index = swap_index;
   struct hash_elem* prev_elem = hash_insert (spt, &entry->elem);
   ASSERT (prev_elem == NULL);
@@ -104,7 +104,7 @@ spt_record_frame_page (struct hash *spt, uint8_t *upage, bool writable,
   }
   entry->upage = upage;
   entry->writable = writable;
-  entry->status = FRAME;
+  entry->status = SPT_FRAME;
   struct hash_elem* prev_elem = hash_insert (spt, &entry->elem);
   ASSERT (prev_elem == NULL);
 }
@@ -132,7 +132,7 @@ spt_destroy_entry (struct hash_elem *e, void *aux UNUSED)
                                     spt_entry->upage);
 
   switch (spt_entry->status) {
-    case FILE:
+    case SPT_FILE:
       if (is_dirty) {
         struct file_aux *f = &spt_entry->aux.file;
         file_write_at (f->file, kpage, f->page_read_bytes, f->ofs);
@@ -145,7 +145,7 @@ spt_destroy_entry (struct hash_elem *e, void *aux UNUSED)
                               spt_entry);
       }
       break;
-    case SWAP:
+    case SPT_SWAP:
       ASSERT (kpage == NULL);
       /* Only stack pages are stored in the swap space,
          so reclaim swap space by dropping the page */
@@ -153,7 +153,7 @@ spt_destroy_entry (struct hash_elem *e, void *aux UNUSED)
       break;
     case SPT_EXEC:
       break;
-    case FRAME:
+    case SPT_FRAME:
       ASSERT (kpage != NULL);
       break;
   }

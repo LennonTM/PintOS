@@ -167,7 +167,7 @@ page_fault (struct intr_frame *f)
       lock_acquire(&frame_lock);
 
       switch (spt_entry->status) {
-        case SWAP:
+        case SPT_SWAP:
           {
             void *kpage = frame_alloc(PAL_USER); /* Allocate a new physical frame */
             ASSERT (kpage != NULL);
@@ -184,10 +184,10 @@ page_fault (struct intr_frame *f)
             swap_in (kpage, spt_entry->aux.swap.index);
             /* Restore dirty bit since only dirty pages are written to swap */
             pagedir_set_dirty (proc->pagedir, spt_entry->upage, true);
-            spt_entry->status = FRAME;
+            spt_entry->status = SPT_FRAME;
           }
           break;
-        case FILE:
+        case SPT_FILE:
         case SPT_EXEC:
           /* Page is to be lazy-loaded from a file
              for both executable page and file page */
@@ -196,7 +196,7 @@ page_fault (struct intr_frame *f)
         case SPT_SHARED:
           spt_load_shared_page (spt_entry);
           break;
-        case FRAME:
+        case SPT_FRAME:
           PANIC ("FRAME page must always be present");
       }
       lock_release(&frame_lock);

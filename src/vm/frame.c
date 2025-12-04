@@ -94,7 +94,7 @@ frame_evict (void) {
     ASSERT (spt_entry != NULL);
     if (spt_entry != NULL) {
       switch (spt_entry->status) {
-        case FILE:
+        case SPT_FILE:
           ASSERT (spt_entry->writable);
           /* If a file page is dirty, write it to the file */
           if (is_dirty) {
@@ -114,16 +114,16 @@ frame_evict (void) {
         case SPT_EXEC:
           if (is_dirty) {
             size_t swap_index = swap_out(kpage);
-            spt_entry->status = SWAP;
+            spt_entry->status = SPT_SWAP;
             spt_entry->aux.swap.index = swap_index;
           }
           break;
-        case SWAP:
+        case SPT_SWAP:
           PANIC ("SWAP page must not be mapped");
-        case FRAME:
+        case SPT_FRAME:
           if (is_dirty) {
             size_t swap_index = swap_out(kpage);
-            spt_entry->status = SWAP;
+            spt_entry->status = SPT_SWAP;
             spt_entry->aux.swap.index = swap_index;
           }
       }

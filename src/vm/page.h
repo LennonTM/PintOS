@@ -10,10 +10,10 @@
 /* Every page is either in a frame, in the swap partition or in the file system. 
    It could also be an all-zero page. */
 enum page_status {
-  SWAP,
-  FILE,
-  SPT_EXEC, /* Writable executable page to be lazy-loaded */
-  FRAME,
+  SPT_SWAP,   /* Page is stored in swap space */
+  SPT_FILE,   /* Writable page from a file */
+  SPT_EXEC,   /* Writable executable page to be lazy-loaded */
+  SPT_FRAME,  /* Page is loaded in memory (if evicted -> SPT_SWAP) */
   SPT_SHARED, /* Shared read-only executable pages */
 };
 
