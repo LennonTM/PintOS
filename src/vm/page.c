@@ -9,7 +9,7 @@
 #include "userprog/pagedir.h"
 #include "devices/swap.h"
 
-/* Returns a hash value for spt_entry p. */
+/* Hash function for SPT entries based on upage. */
 unsigned
 spt_hash (const struct hash_elem *p_, void *aux UNUSED)
 {
@@ -17,7 +17,7 @@ spt_hash (const struct hash_elem *p_, void *aux UNUSED)
   return hash_bytes (&p->upage, sizeof p->upage);
 }
 
-/* Returns true if spt_entry a precedes spt_entry b. */
+/* Comparison function for SPT entries. */
 bool
 spt_less (const struct hash_elem *a_, const struct hash_elem *b_,
 void *aux UNUSED)
@@ -27,8 +27,7 @@ void *aux UNUSED)
   return a->upage < b->upage;                           
 }
 
-/* Allocates and inserts a new SPT entry into the hash table.
-   Returns the newly created entry. Panics if allocation fails. */
+/* Allocates and inserts a new SPT entry. Panics on allocation failure. */
 static struct spt_entry *
 spt_create_entry (struct hash *spt, uint8_t *upage, bool writable,
                   enum page_status status)
@@ -47,7 +46,7 @@ spt_create_entry (struct hash *spt, uint8_t *upage, bool writable,
   return entry;
 }
 
-/* Records the file at page starting at upage in spt. */
+/* Records a file-backed page in the SPT. */
 void
 spt_record_file_page (struct hash *spt, struct file *file, off_t ofs,
                       uint8_t *upage, uint32_t page_read_bytes,
@@ -59,9 +58,7 @@ spt_record_file_page (struct hash *spt, struct file *file, off_t ofs,
   entry->aux.file.page_read_bytes = page_read_bytes;
 }
 
-/* Record executable page in SPT:
-   writable   -> SPT_EXEC   (writable exec page to be lazy-loaded)
-   !writable  -> SPT_SHARED (read-only shared exec page) */
+/* Records an executable page: SPT_EXEC if writable, SPT_SHARED otherwise. */
 void
 spt_record_exec_page (struct hash *spt, struct file *file, off_t ofs,
                       uint8_t *upage, uint32_t page_read_bytes,
@@ -74,6 +71,7 @@ spt_record_exec_page (struct hash *spt, struct file *file, off_t ofs,
   entry->aux.file.page_read_bytes = page_read_bytes;
 }
 
+/* Records a page stored in swap space. */
 void
 spt_record_swap_page (struct hash *spt, uint8_t *upage, bool writable,
                       size_t swap_index)
@@ -82,15 +80,14 @@ spt_record_swap_page (struct hash *spt, uint8_t *upage, bool writable,
   entry->aux.swap.index = swap_index;
 }
 
+/* Records a page currently loaded in a frame. */
 void
 spt_record_frame_page (struct hash *spt, uint8_t *upage, bool writable)
 {
   spt_create_entry (spt, upage, writable, SPT_FRAME);
 }
 
-/* Returns an address of an SPT entry
-   corresponding to provided user vaddr of the page 
-   NULL if not entry exists */
+/* Returns SPT entry for upage, or NULL if not found. */
 struct spt_entry *
 spt_get_entry (struct hash *spt, void *upage) {
   struct spt_entry p;
@@ -100,7 +97,7 @@ spt_get_entry (struct hash *spt, void *upage) {
   return e != NULL ? hash_entry (e, struct spt_entry, elem) : NULL;
 }
 
-/* Helper function for destory_spt, destroys memory for the entry */
+/* Cleans up and frees an SPT entry during hash destruction. */
 static void
 spt_destroy_entry (struct hash_elem *e, void *aux UNUSED)
 {
@@ -142,21 +139,22 @@ spt_destroy_entry (struct hash_elem *e, void *aux UNUSED)
   free (spt_entry); 
 }
 
+/* Destroys all entries in the SPT and frees associated resources. */
 void
-spt_destroy (struct hash *spt) {
+spt_destroy (struct hash *spt)
+{
   hash_destroy (spt, spt_destroy_entry);
 }
 
-/* Removes provided entry from the SPT
-   returns true if entry was removed successfully */
-bool 
+/* Removes and frees an SPT entry. Returns true on success. */
+bool
 spt_remove_entry (struct hash *spt, struct spt_entry *entry) {
   struct hash_elem *removed_elem = hash_delete (spt, &entry->elem);
   spt_destroy_entry (&entry->elem, NULL);
   return removed_elem != NULL;
 }
 
-/* Load a writable page from a file (all read-only pages are shared). */
+/* Loads a writable page from file into memory. */
 bool
 spt_load_file_page (struct spt_entry *spt_entry)
 {
@@ -169,9 +167,7 @@ spt_load_file_page (struct spt_entry *spt_entry)
   return kpage != NULL;
 }
 
-/* Load read-only shared page into memory.
-   Allocate new kpage if no other process loaded the page yet,
-   otherwise link to the existing page. */
+/* Loads a shared read-only page, reusing existing frame if available. */
 bool
 spt_load_shared_page (struct spt_entry *spt_entry)
 {
@@ -207,9 +203,10 @@ spt_load_shared_page (struct spt_entry *spt_entry)
   return true;
 }
 
-/* Removes the page at address upage in the spt table. */
+/* Removes the page at upage from the current process's SPT. */
 void
-spt_remove_page (void* upage) {
+spt_remove_page (void *upage)
+{
   struct hash *spt = &thread_current()->process->spt;
   struct spt_entry *spt_entry = spt_get_entry (spt, upage);
   spt_remove_entry (spt, spt_entry);

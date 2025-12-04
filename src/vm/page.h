@@ -7,8 +7,6 @@
 #include "lib/debug.h"
 #include "filesys/file.h"
 
-/* Every page is either in a frame, in the swap partition or in the file system. 
-   It could also be an all-zero page. */
 enum page_status {
   SPT_SWAP,   /* Page is stored in swap space */
   SPT_FILE,   /* Writable page from a file */
@@ -18,45 +16,31 @@ enum page_status {
 };
 
 struct file_aux {
-  struct file* file;        /* Pointer to the struct file. */
-  size_t ofs;               /* The number of bytes offset within the file. */
-  size_t page_read_bytes;   /* Number of bytes to read from the file. */
+  struct file *file;        /* File to read page data from. */
+  size_t ofs;               /* Byte offset within the file. */
+  size_t page_read_bytes;   /* Bytes to read from file (rest is zeroed). */
 };
 
 struct swap_aux {
-  size_t index; /* Index within the swap disk. */
+  size_t index;  /* Swap slot index. */
 };
 
-/* We use a union to reduce size of struct when using mutually exclusive
-   meta data between different locations page could be stored. */
 union spt_entry_aux {
   struct file_aux file;
   struct swap_aux swap;
 };
 
-/* Entry to the Supplementary Page Table. */
 struct spt_entry {
-  void *upage; /* User virtual address of the page */
-
-  /* Redundant, since this information can be stored in PTE
-     TODO Remove in the future and record in PTE */
-  bool writable; /* Is user page writable */
-
-  enum page_status status; /* Indicates how the page should be handled */
-
-  union spt_entry_aux aux; /* Meta data for the spt entry */
-
+  void *upage;              /* User virtual address of the page. */
+  bool writable;            /* True if page is writable. */
+  enum page_status status;  /* Where/how the page is stored. */
+  union spt_entry_aux aux;  /* Status-specific metadata. */
   struct hash_elem elem;
 };
 
-/* Returns a hash value for spt_entry p. */
-unsigned
-spt_hash (const struct hash_elem *p_, void *aux UNUSED);
-
-/* Returns true if spt_entry a precedes spt_entry b. */
-bool
-spt_less (const struct hash_elem *a_, const struct hash_elem *b_,
-void *aux UNUSED);
+unsigned spt_hash (const struct hash_elem *p_, void *aux UNUSED);
+bool spt_less (const struct hash_elem *a_, const struct hash_elem *b_,
+               void *aux UNUSED);
 
 void spt_record_file_page (struct hash *spt, struct file *file, off_t ofs,
                            uint8_t *upage, uint32_t page_read_bytes,
@@ -70,9 +54,8 @@ void spt_record_frame_page (struct hash *spt, uint8_t *upage, bool writable);
 bool spt_remove_entry (struct hash *spt, struct spt_entry *entry);
 struct spt_entry *spt_get_entry (struct hash *spt, void *upage);
 void spt_destroy (struct hash *spt);
-bool spt_load_file_page (struct spt_entry* spt_entry);
-bool spt_load_shared_page (struct spt_entry* spt_entry);
-void spt_share_entry (struct spt_entry *spt_entry, struct list *shared_list);
-void spt_remove_page (void* upage);
+bool spt_load_file_page (struct spt_entry *spt_entry);
+bool spt_load_shared_page (struct spt_entry *spt_entry);
+void spt_remove_page (void *upage);
 
 #endif 

@@ -8,11 +8,11 @@
 #include "userprog/process.h"
 #include "userprog/pagedir.h"
 
-/* frame_table_entry is an array of all frame_table entries */
+/* Global table of shared read-only executable pages. */
 static struct hash shared_table;
 static struct lock shared_table_lock;
 
-/* Returns a hash value for shared_entry p. */
+/* Hash function for shared entries based on file and offset. */
 unsigned
 shared_hash (const struct hash_elem *p_, void *aux UNUSED)
 {
@@ -22,7 +22,7 @@ shared_hash (const struct hash_elem *p_, void *aux UNUSED)
   return hash_file ^ hash_offset;
 }
 
-/* Returns true if shared_entry a precedes shared_entry b. */
+/* Comparison function for shared entries. */
 bool
 shared_less (const struct hash_elem *a_, const struct hash_elem *b_,
 void *aux UNUSED)
@@ -35,18 +35,20 @@ void *aux UNUSED)
   return file_less (a->file, b->file);
 }
 
-/* Initialises shared table of read only executables */
+/* Initializes the shared page table. */
 void
-shared_table_init (void) {
+shared_table_init (void)
+{
   if (!hash_init(&shared_table, shared_hash, shared_less, NULL)) {
     PANIC("Failed to initialise shared_table");
   }
   lock_init (&shared_table_lock);
 }
 
-/* Retrieve entry from the table by file pointer and offset */
+/* Returns shared entry for {file, offset}, or NULL if not found. */
 struct shared_entry *
-get_shared_entry (struct file *file, off_t offset) {
+get_shared_entry (struct file *file, off_t offset)
+{
   struct shared_entry key_entry = (struct shared_entry) {
     .file = file,
     .offset = offset
@@ -61,8 +63,7 @@ get_shared_entry (struct file *file, off_t offset) {
   return shared_entry;
 }
 
-/* Creates empty initial shared_entry
-   Shared table lock MUST be held */
+/* Creates a new shared entry. Caller must hold shared_table_lock. */
 static struct shared_entry *
 create_shared_entry (struct file *file, off_t offset)
 {
@@ -84,7 +85,7 @@ create_shared_entry (struct file *file, off_t offset)
   return shared_entry;
 }
 
-/* Links provided spt_entry to shared entry for {file, offset} */
+/* Links spt_entry to shared entry, creating one if needed. */
 struct shared_entry *
 link_to_shared_entry (struct file *file, off_t offset,
                       struct spt_entry *spt_entry)
@@ -109,6 +110,7 @@ link_to_shared_entry (struct file *file, off_t offset,
   return shared_entry;
 }
 
+/* Unlinks spt_entry from shared entry, destroying entry if last reference. */
 void
 unlink_shared_entry (struct file *file, off_t offset,
                      struct spt_entry *spt_entry)

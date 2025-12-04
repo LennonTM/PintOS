@@ -10,35 +10,24 @@
 #include "vm/page.h"
 #include "threads/synch.h"
 
-/* Entry to the read-only-executable page table. */
 struct shared_entry {
-  struct file *file;        /* File to read from (part of key) */
-  off_t offset;             /* Offset in the file (part of key) */
-  size_t page_read_bytes;   /* Number of bytes to read from the file. */
-  struct lock lock;         /* Lock to atomically access shared entry */
-
-  void *kpage;              /* Kernel virtual address of shared frame */
-  int reference_count;     /* Number of processes that reference the entry. */
-
+  struct file *file;        /* File to read from (part of key). */
+  off_t offset;             /* Offset in file (part of key). */
+  size_t page_read_bytes;   /* Bytes to read from file. */
+  struct lock lock;         /* Protects kpage and reference_count. */
+  void *kpage;              /* Kernel address of shared frame, or NULL. */
+  int reference_count;      /* Number of processes sharing this entry. */
   struct hash_elem elem;
 };
 
-unsigned
-shared_hash (const struct hash_elem *p_, void *aux UNUSED);
-
-bool
-shared_less (const struct hash_elem *a_, const struct hash_elem *b_,
-void *aux UNUSED);
+unsigned shared_hash (const struct hash_elem *p_, void *aux UNUSED);
+bool shared_less (const struct hash_elem *a_, const struct hash_elem *b_,
+                  void *aux UNUSED);
 
 void shared_table_init (void);
-
-struct shared_entry *
-get_shared_entry (struct file *file, off_t offset);
-
-struct shared_entry *
-link_to_shared_entry (struct file *file, off_t offset,
-                      struct spt_entry *spt_entry);
-void
-unlink_shared_entry (struct file *file, off_t offset,
-                     struct spt_entry *spt_entry);
+struct shared_entry *get_shared_entry (struct file *file, off_t offset);
+struct shared_entry *link_to_shared_entry (struct file *file, off_t offset,
+                                           struct spt_entry *spt_entry);
+void unlink_shared_entry (struct file *file, off_t offset,
+                          struct spt_entry *spt_entry);
 #endif

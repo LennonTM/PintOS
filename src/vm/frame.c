@@ -13,20 +13,19 @@
 #include "vm/shared.h"
 #include "devices/swap.h"
 
-/* Lock prevents race conditions when accessing the frame table
-for allocation and eviction */
+/* Protects frame table during allocation and eviction. */
 static struct lock frame_lock;
 
-/* Used to iterate through frame table to find a 
-victim frame to evict */
+/* Clock hand for second-chance eviction algorithm. */
 static size_t eviction_search_index = 0;
 
-/* frame_table_entry is an array of all frame_table entries */
+/* Array of frame table entries, one per user page. */
 static struct frame_table_entry *frame_table = NULL;
 
-/* Initialises frame_table_entry array */
+/* Initializes the frame table. */
 void
-frame_table_init (void) {
+frame_table_init (void)
+{
   size_t user_pages = get_user_pages();
   /* Set up frame table */
   frame_table = malloc(sizeof(struct frame_table_entry) * user_pages);
@@ -36,9 +35,10 @@ frame_table_init (void) {
   lock_init(&frame_lock);
 }
 
-/* Selects a frame to evict to swap disk, and returns the freed kpage address */
+/* Evicts a frame using second-chance algorithm. Returns freed kpage. */
 static void *
-frame_evict (void) {
+frame_evict (void)
+{
   size_t user_pages = get_user_pages();
   struct frame_table_entry *victim = NULL;
   void *kpage = NULL;
@@ -143,10 +143,10 @@ frame_evict (void) {
   return kpage;
 }
 
-/* Allocates a page using palloc_get_page
-   the corresponding frame_table_entry will be used after */
+/* Allocates a user frame, evicting if necessary. */
 void *
-frame_alloc (enum palloc_flags flags) {
+frame_alloc (enum palloc_flags flags)
+{
   /* Frame table is maintained only for user frames */
   ASSERT (flags & PAL_USER);
 
@@ -176,10 +176,10 @@ frame_alloc (enum palloc_flags flags) {
   return kpage;   
 }
 
-/* Frees a page using palloc_free_page
-   the corresponding frame_table_entry will be unused after */
+/* Removes current process's mapping to kpage, freeing if last owner. */
 void
-frame_free (void *kpage) {
+frame_free (void *kpage)
+{
   lock_acquire(&frame_lock);
 
   size_t frame_index = get_page_index(kpage);
@@ -215,11 +215,10 @@ frame_free (void *kpage) {
   lock_release(&frame_lock);
 }
 
-/* Maps user virtual address UPAGE to a frame at KPAGE
-   by calling install_page
-   Sets owner and upage members of a frame corresponding to kpage */
+/* Installs mapping from upage to kpage and registers ownership. */
 bool
-frame_install_page(void *upage, void *kpage, bool writable) {
+frame_install_page (void *upage, void *kpage, bool writable)
+{
   /* Install the mapping in the pagedir of the process */
   if (!install_page (upage, kpage, writable)) {
     return false;

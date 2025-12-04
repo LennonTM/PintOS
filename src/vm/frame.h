@@ -7,19 +7,13 @@
 #include "threads/synch.h"
 
 struct frame_table_entry {
-  /* List of processes and user page addresses
-     that map to this frame */
-  struct list owners;
-  /* Ensure kernel doesn't page fault accessing */
-  bool pinned;
+  struct list owners;  /* Processes mapping to this frame. */
+  bool pinned;         /* If true, frame cannot be evicted. */
 };
 
 struct frame_owner {
-  /* User virtual address that maps to the frame */
-  void *upage;
-  /* Process which holds the pagedir for upage -> frame mapping */
-  struct process *process;
-  /* Element on frame_table_entry list */
+  void *upage;            /* User virtual address mapping to frame. */
+  struct process *process; /* Owning process. */
   struct list_elem elem;
 };
 
