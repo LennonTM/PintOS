@@ -22,13 +22,8 @@ struct file_aux {
   size_t page_read_bytes;   /* Bytes to read from file (rest is zeroed). */
 };
 
-struct swap_aux {
-  size_t index;  /* Swap slot index. */
-};
-
 union spt_entry_aux {
   struct file_aux file;
-  struct swap_aux swap;
 };
 
 struct spt_entry {
@@ -47,14 +42,11 @@ void spt_record_file_page (struct hash *spt, struct file *file, off_t ofs,
 void spt_record_exec_page (struct hash *spt, struct file *file, off_t ofs,
                            uint8_t *upage, uint32_t page_read_bytes,
                            bool writable);
-void spt_record_swap_page (struct hash *spt, uint8_t *upage, bool writable,
-                           size_t swap_index);
-void spt_record_frame_page (struct hash *spt, uint8_t *upage, bool writable);
 bool spt_remove_entry (struct hash *spt, struct spt_entry *entry);
 struct spt_entry *spt_get_entry (struct hash *spt, void *upage);
 void spt_destroy (struct hash *spt);
 
-bool spt_load_swap_page (struct spt_entry *spt_entry);
+bool spt_load_swap_page (void *upage);
 uint8_t *spt_load_file_page (struct spt_entry *spt_entry);
 bool spt_load_shared_page (struct spt_entry *spt_entry);
 void spt_remove_page (void *upage);

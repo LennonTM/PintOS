@@ -74,22 +74,6 @@ spt_record_exec_page (struct hash *spt, struct file *file, off_t ofs,
   entry->aux.file.page_read_bytes = page_read_bytes;
 }
 
-/* Records a page stored in swap space. */
-void
-spt_record_swap_page (struct hash *spt, uint8_t *upage, bool writable,
-                      size_t swap_index)
-{
-  struct spt_entry *entry = spt_create_entry (spt, upage, writable, SPT_SWAP);
-  entry->aux.swap.index = swap_index;
-}
-
-/* Records a page currently loaded in a frame. */
-void
-spt_record_frame_page (struct hash *spt, uint8_t *upage, bool writable)
-{
-  spt_create_entry (spt, upage, writable, SPT_FRAME);
-}
-
 /* Returns SPT entry for upage, or NULL if not found. */
 struct spt_entry *
 spt_get_entry (struct hash *spt, void *upage) {
@@ -105,12 +89,12 @@ static void
 spt_destroy_entry (struct hash_elem *e, void *aux UNUSED)
 {
   struct spt_entry *spt_entry = hash_entry (e, struct spt_entry, elem);
-  void *kpage = pagedir_get_page(thread_current()->process->pagedir,
-                                 spt_entry->upage);
-  bool is_dirty = pagedir_is_dirty (thread_current()->process->pagedir,
-                                    spt_entry->upage);
+  uint32_t *pd = thread_current()->process->pagedir;
+  void *upage = spt_entry->upage;
+  void *kpage = pagedir_get_page(pd, upage);
+  bool is_dirty = pagedir_is_dirty (pd, upage);
 
-  enum page_status status = get_page_status (spt_entry->upage);
+  enum page_status status = get_page_status (upage);
   switch (status) {
     case SPT_INVALID:
       PANIC("HEY!");
@@ -129,20 +113,20 @@ spt_destroy_entry (struct hash_elem *e, void *aux UNUSED)
       }
       break;
     case SPT_SWAP:
-      ASSERT (kpage == NULL);
-      /* Only stack pages are stored in the swap space,
-         so reclaim swap space by dropping the page */
-      swap_drop (spt_entry->aux.swap.index);
+      PANIC("SPT_SWAP has no SPT entry");
       break;
     case SPT_EXEC:
       break;
     case SPT_FRAME:
-      ASSERT (kpage != NULL);
+      PANIC("SPT_FRAME has no SPT entry");
       break;
   }
-  if (kpage != NULL && status != SPT_INVALID) {
+  if (kpage != NULL) {
+    pagedir_clear_page (pd, upage);
     frame_free (kpage);
   }
+  /* Mark page as invalid so future faults don't try to load it */
+  set_page_status (upage, SPT_INVALID);
   free (spt_entry); 
 }
 
@@ -163,15 +147,14 @@ spt_remove_entry (struct hash *spt, struct spt_entry *entry) {
 
 /* Loads a writable page from file into memory. */
 bool
-spt_load_swap_page (struct spt_entry *spt_entry)
+spt_load_swap_page (void *upage)
 {
   uint32_t *pd = thread_current()->process->pagedir;
-  bool writable = pagedir_is_writable (pd, spt_entry->upage);
-  bool success = load_page_from_swap (spt_entry->upage,
+  bool writable = pagedir_is_writable (pd, upage);
+  size_t swap_slot = pagedir_get_swap (pd, upage);
+  bool success = load_page_from_swap (upage,
                                       writable,
-                                      spt_entry->aux.swap.index);
-  if (success)
-    set_page_status (spt_entry->upage, SPT_FRAME);
+                                      swap_slot);
   return success;
 }
 

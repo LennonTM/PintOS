@@ -94,8 +94,7 @@ frame_evict (void)
     bool writable = pagedir_is_writable(pd, owner->upage);
 
     /* All frame owner(s) hold necessary information in the spt_entry */
-    ASSERT (spt_entry != NULL);
-    enum page_status status = get_page_status (spt_entry->upage);
+    enum page_status status = pagedir_get_avl (pd, owner->upage);
     switch (status) {
       case SPT_FILE:
         ASSERT (writable);
@@ -115,16 +114,20 @@ frame_evict (void)
         }
         break;
       case SPT_EXEC:
+        if (is_dirty) {
+          spt_remove_entry (&owner->process->spt, spt_entry);
+        }
       case SPT_FRAME:
         /* Dirty exec/frame pages get swapped out */
         if (is_dirty) {
           size_t swap_index = swap_out(kpage);
-          set_page_status (spt_entry->upage, SPT_SWAP);
-          spt_entry->aux.swap.index = swap_index;
+          pagedir_set_swap(pd, owner->upage, swap_index);
         }
         break;
       case SPT_SWAP:
         PANIC ("SWAP page must not be mapped");
+      case SPT_INVALID:
+        PANIC ("Evicted invalid SPT");
     }
 
     /* Get the next element before freeing the owner */
@@ -202,7 +205,6 @@ frame_free (void *kpage)
   /* If the frame is no longer referred to by any other process
      Free the page and clear the PTE to avoid repeated clear */
   if (list_empty(&frame->owners)) {
-    pagedir_clear_page (found_owner->process->pagedir, found_owner->upage);
     palloc_free_page (kpage);
   }
 
