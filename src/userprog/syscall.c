@@ -486,7 +486,7 @@ static mapid_t mmap (int fd, void *addr) {
     int read_bytes = min(length, PGSIZE);
     mmap_increment_pages (mmap_table, map_id);
     /*We lazy load the page, if valid.*/
-    spt_record_file_page(spt, file, ofs, addr, read_bytes, true);
+    spt_record_page(spt, file, ofs, addr, read_bytes, true, SPT_FILE);
     ofs += read_bytes;
     length -= read_bytes;
     addr += read_bytes;

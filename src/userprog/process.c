@@ -841,8 +841,8 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 
       /* Record data about a lazy-loaded page in SPT */
       struct hash *spt = &thread_current()->process->spt;
-      spt_record_exec_page (spt, file, ofs, upage,
-                            page_read_bytes, writable);
+      enum page_status status = writable ? SPT_EXEC : SPT_SHARED;
+      spt_record_page (spt, file, ofs, upage, page_read_bytes, writable, status);
       /* Advance. */
       read_bytes -= page_read_bytes;
       zero_bytes -= page_zero_bytes;
@@ -864,7 +864,7 @@ setup_stack (void **esp)
   }
 
   *esp = PHYS_BASE;
-  spt_record_frame_page (&thread_current()->process->spt, upage, true);
+  set_page_status (upage, SPT_FRAME);
   return true;
 }
 

@@ -16,19 +16,11 @@ enum page_status {
   SPT_SHARED, /* Shared read-only executable pages */
 };
 
-struct file_aux {
+struct spt_entry {
+  void *upage;              /* User virtual address of the page. */
   struct file *file;        /* File to read page data from. */
   size_t ofs;               /* Byte offset within the file. */
   size_t page_read_bytes;   /* Bytes to read from file (rest is zeroed). */
-};
-
-union spt_entry_aux {
-  struct file_aux file;
-};
-
-struct spt_entry {
-  void *upage;              /* User virtual address of the page. */
-  union spt_entry_aux aux;  /* Status-specific metadata. */
   struct hash_elem elem;
 };
 
@@ -36,12 +28,9 @@ unsigned spt_hash (const struct hash_elem *p_, void *aux UNUSED);
 bool spt_less (const struct hash_elem *a_, const struct hash_elem *b_,
                void *aux UNUSED);
 
-void spt_record_file_page (struct hash *spt, struct file *file, off_t ofs,
-                           uint8_t *upage, uint32_t page_read_bytes,
-                           bool writable);
-void spt_record_exec_page (struct hash *spt, struct file *file, off_t ofs,
-                           uint8_t *upage, uint32_t page_read_bytes,
-                           bool writable);
+void spt_record_page (struct hash *spt, struct file *file, off_t ofs,
+                      uint8_t *upage, uint32_t page_read_bytes,
+                      bool writable, enum page_status status);
 bool spt_remove_entry (struct hash *spt, struct spt_entry *entry);
 struct spt_entry *spt_get_entry (struct hash *spt, void *upage);
 void spt_destroy (struct hash *spt);

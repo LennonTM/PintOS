@@ -82,7 +82,7 @@ frame_evict (void)
   while (e != list_end (&victim->owners))
   {
     struct frame_owner *owner = list_entry (e, struct frame_owner, elem);
-    struct spt_entry *spt_entry =
+    struct spt_entry *spte =
       spt_get_entry(&owner->process->spt, owner->upage);
     uint32_t *pd = owner->process->pagedir;
 
@@ -100,25 +100,25 @@ frame_evict (void)
         ASSERT (writable);
         /* If a file page is dirty, write it to the file */
         if (is_dirty) {
-          struct file_aux *f = &spt_entry->aux.file;
-          file_write_at (f->file, kpage, f->page_read_bytes, f->ofs);
+          file_write_at (spte->file, kpage, spte->page_read_bytes, spte->ofs);
         }
         /* Otherwise the page is cleared from memory, but
             spt entry is kept to load it again later */
         break;
       case SPT_SHARED:
         ASSERT (!writable);
-        {
-          struct file_aux *f = &spt_entry->aux.file;
-          unlink_shared_entry (f->file, f->ofs, spt_entry);
-        }
+        unlink_shared_entry (spte->file, spte->ofs, spte);
         break;
       case SPT_EXEC:
+        /* Dirty exec pages: remove SPT entry (no longer file-backed) and swap out */
         if (is_dirty) {
-          spt_remove_entry (&owner->process->spt, spt_entry);
+          spt_remove_entry (&owner->process->spt, spte);
+          size_t swap_index = swap_out(kpage);
+          pagedir_set_swap(pd, owner->upage, swap_index);
         }
+        break;
       case SPT_FRAME:
-        /* Dirty exec/frame pages get swapped out */
+        /* Dirty frame pages get swapped out */
         if (is_dirty) {
           size_t swap_index = swap_out(kpage);
           pagedir_set_swap(pd, owner->upage, swap_index);
