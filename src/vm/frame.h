@@ -9,6 +9,7 @@
 struct frame_table_entry {
   struct list owners;  /* Processes mapping to this frame. */
   bool pinned;         /* If true, frame cannot be evicted. */
+  struct lock lock;    /* Enforces synchronisation on concurrent access */
 };
 
 struct frame_owner {

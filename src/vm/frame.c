@@ -83,6 +83,7 @@ frame_evict (void)
   victim->pinned = true;
   lock_release(&frame_lock);
 
+  lock_acquire(&victim->lock);
   struct list_elem *e = list_begin (&victim->owners);
   while (e != list_end (&victim->owners))
   {
@@ -141,9 +142,13 @@ frame_evict (void)
     free (owner);
     e = next_e;
   }
-
+  
   /* Reset the frame table entry */
   list_init (&victim->owners);
+
+  lock_release(&victim->lock);
+
+
 
   return kpage;
 }
@@ -166,9 +171,20 @@ frame_alloc (enum palloc_flags flags)
   /* Frame table is maintained only for user frames */
   ASSERT (flags & PAL_USER);
 
-
   /* Attempts to allocate a page from user pool */
+  lock_acquire(&frame_lock);
   void *kpage = palloc_get_page (flags);
+  if (kpage != NULL) {
+    /* Initialise the frame table entry */
+    size_t frame_index = get_page_index(kpage);
+    ASSERT(frame_index < get_user_pages());
+
+    struct frame_table_entry *frame = &frame_table[frame_index];
+    frame->pinned = true;
+    lock_init(&frame->lock);
+    list_init (&frame->owners);
+  }
+  lock_release(&frame_lock);
 
   /* If memory is full, we must evict a page to make room */
   if (kpage == NULL) {
@@ -179,13 +195,6 @@ frame_alloc (enum palloc_flags flags)
     if (flags & PAL_ZERO) {
       memset(kpage, 0, PGSIZE);
     }
-  } else {
-    size_t frame_index = get_page_index(kpage);
-    ASSERT(frame_index < get_user_pages());
-
-    struct frame_table_entry *frame = &frame_table[frame_index];
-    frame->pinned = true;
-    list_init (&frame->owners);
   }
   
   return kpage;   
@@ -195,12 +204,12 @@ frame_alloc (enum palloc_flags flags)
 void
 frame_free (void *kpage)
 {
-  lock_acquire(&frame_lock);
-
   size_t frame_index = get_page_index(kpage);
   ASSERT(frame_index < get_user_pages());
 
   struct frame_table_entry *frame = &frame_table[frame_index];
+
+  lock_acquire(&frame->lock);
 
   struct list_elem *e = list_begin(&frame->owners);
   struct frame_owner *found_owner = NULL;
@@ -214,19 +223,23 @@ frame_free (void *kpage)
     e = list_next(e);
   }
 
-  ASSERT (found_owner != NULL);
+  if (found_owner != NULL) {
+    list_remove(&found_owner->elem);
 
-  list_remove(&found_owner->elem);
- 
-  /* If the frame is no longer referred to by any other process
-     Free the page and clear the PTE to avoid repeated clear */
-  if (list_empty(&frame->owners)) {
-    palloc_free_page (kpage);
+    /* If the frame is no longer referred to by any other process
+        Free the page and clear the PTE to avoid repeated clear */
+    if (list_empty(&frame->owners)) {
+      palloc_free_page (kpage);
+    }
+
+    free(found_owner);
+  } else {
+    /* This is a very specific race condition where the entry has 
+       already been freed during eviction. 
+       Eviction has already happened. We are safe to do nothing */
   }
 
-  free(found_owner);
-
-  lock_release(&frame_lock);
+  lock_release(&frame->lock);
 }
 
 /* Installs mapping from upage to kpage and registers ownership. */
