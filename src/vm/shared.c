@@ -115,10 +115,9 @@ link_to_shared_entry (struct file *file, off_t offset,
 /* Unlinks spt_entry from shared entry, destroying entry if last reference. */
 void
 unlink_shared_entry (struct file *file, off_t offset,
-                     struct spt_entry *spt_entry)
+                     struct spt_entry *spt_entry, uint32_t *pd)
 {
   ASSERT (get_page_status (spt_entry->upage) == SPT_SHARED);
-  uint32_t *pd = thread_current()->process->pagedir;
   bool writable = pagedir_is_writable (pd, spt_entry->upage);
   ASSERT (!writable);
   /* Unlink while holding a shared table lock to ensure that

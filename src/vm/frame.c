@@ -113,7 +113,7 @@ frame_evict (void)
         break;
       case SPT_SHARED:
         ASSERT (!writable);
-        unlink_shared_entry (spte->file, spte->ofs, spte);
+        unlink_shared_entry (spte->file, spte->ofs, spte, pd);
         break;
       case SPT_EXEC:
         /* Dirty exec pages: remove SPT entry 

@@ -29,5 +29,5 @@ struct shared_entry *get_shared_entry (struct file *file, off_t offset);
 struct shared_entry *link_to_shared_entry (struct file *file, off_t offset,
                                            struct spt_entry *spt_entry);
 void unlink_shared_entry (struct file *file, off_t offset,
-                          struct spt_entry *spt_entry);
+                          struct spt_entry *spt_entry, uint32_t *pd);
 #endif

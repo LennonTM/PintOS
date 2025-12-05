@@ -88,7 +88,7 @@ spt_destroy_entry (struct hash_elem *e, void *aux UNUSED)
   enum page_status status = get_page_status (upage);
   switch (status) {
     case SPT_INVALID:
-      PANIC("HEY!");
+      PANIC("SPT_INVALID has no SPT entry");
       break;
     case SPT_FILE:
       if (is_dirty) {
@@ -97,7 +97,7 @@ spt_destroy_entry (struct hash_elem *e, void *aux UNUSED)
       break;
     case SPT_SHARED:
       if (kpage != NULL) {
-        unlink_shared_entry (spte->file, spte->ofs, spte);
+        unlink_shared_entry (spte->file, spte->ofs, spte, pd);
       }
       break;
     case SPT_SWAP:
@@ -183,7 +183,7 @@ spt_load_shared_page (struct spt_entry *spte)
     kpage = spt_load_file_page(spte);
     if (kpage == NULL) {
       lock_release (&shared_entry->lock);
-      unlink_shared_entry (spte->file, spte->ofs, spte);
+      unlink_shared_entry (spte->file, spte->ofs, spte, pd);
       return false;
     }
     shared_entry->kpage = kpage;
