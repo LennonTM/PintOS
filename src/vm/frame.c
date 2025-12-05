@@ -110,7 +110,8 @@ frame_evict (void)
         unlink_shared_entry (spte->file, spte->ofs, spte);
         break;
       case SPT_EXEC:
-        /* Dirty exec pages: remove SPT entry (no longer file-backed) and swap out */
+        /* Dirty exec pages: remove SPT entry 
+           (no longer file-backed) and swap out */
         if (is_dirty) {
           spt_remove_entry (&owner->process->spt, spte);
           size_t swap_index = swap_out(kpage);

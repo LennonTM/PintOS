@@ -467,13 +467,11 @@ static mapid_t mmap (int fd, void *addr) {
   }
 
   struct hash *spt = &thread_current()->process->spt;
-  uint32_t *pagedir = thread_current()->process->pagedir;
-  /* We check for overlap and fail if so. */
+  /* We check for overlap and fail if so.
+     Use get_page_status to catch all page types including SWAP pages
+     which aren't in SPT and aren't present in pagedir. */
   for (int i = 0; i < length; i+=PGSIZE) {
-    if (
-      pagedir_get_page(pagedir, addr+i) != NULL || 
-      spt_get_entry(spt, addr + i) != NULL
-    ) {
+    if (get_page_status(addr + i) != SPT_INVALID) {
       return MAP_FAILED;
     }
   }
