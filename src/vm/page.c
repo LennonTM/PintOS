@@ -11,7 +11,8 @@
 
 #include <stdio.h>
 
-#define STACK_GROWTH_THRESHOLD 32
+#define PUSH_BYTES 4   /* PUSH can fault 4 bytes below esp */
+#define PUSHA_BYTES 32 /* PUSHA can fault 32 bytes below esp */
 #define STACK_GROWTH_MAX_SIZE 0x800000
 
 /* Hash function for SPT entries based on upage. */
@@ -248,9 +249,16 @@ bool spt_claim_page (void *fault_addr, void *esp)
   }
 
 
-  /* Check for stack growth */
-  if (is_user_vaddr (fault_addr) 
-      && fault_addr >= esp - STACK_GROWTH_THRESHOLD) 
+  /* Check for stack growth:
+     - fault_addr >= esp: normal stack access
+     - fault_addr == esp - 4: PUSH instruction
+     - fault_addr == esp - 32: PUSHA instruction */
+  bool is_valid_stack_access = is_user_vaddr (fault_addr) &&
+    (fault_addr >= esp ||
+     fault_addr == esp - PUSH_BYTES ||
+     fault_addr == esp - PUSHA_BYTES);
+
+  if (is_valid_stack_access) 
   {
     /* Verify that the stack is less than STACK_GROWTH_MAX_SIZE */
     if (fault_addr < PHYS_BASE - STACK_GROWTH_MAX_SIZE)
