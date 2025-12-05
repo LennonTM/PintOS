@@ -39,6 +39,7 @@ frame_table_init (void)
 static void *
 frame_evict (void)
 {
+  lock_acquire(&frame_lock);
   size_t user_pages = get_user_pages();
   struct frame_table_entry *victim = NULL;
   void *kpage = NULL;
@@ -77,6 +78,10 @@ frame_evict (void)
   }
 
   ASSERT(victim != NULL);
+  /* pin the frame until it has finished loading, 
+     so we are free to release the lock */
+  victim->pinned = true;
+  lock_release(&frame_lock);
 
   struct list_elem *e = list_begin (&victim->owners);
   while (e != list_end (&victim->owners))
@@ -143,6 +148,17 @@ frame_evict (void)
   return kpage;
 }
 
+void
+frame_unpin (void *kpage) 
+{
+  size_t frame_index = get_page_index(kpage);
+  ASSERT(frame_index < get_user_pages());
+
+  struct frame_table_entry *frame = &frame_table[frame_index];
+  ASSERT(frame->pinned == true);
+  frame->pinned = false;
+}
+
 /* Allocates a user frame, evicting if necessary. */
 void *
 frame_alloc (enum palloc_flags flags)
@@ -150,7 +166,6 @@ frame_alloc (enum palloc_flags flags)
   /* Frame table is maintained only for user frames */
   ASSERT (flags & PAL_USER);
 
-  lock_acquire(&frame_lock);
 
   /* Attempts to allocate a page from user pool */
   void *kpage = palloc_get_page (flags);
@@ -158,21 +173,21 @@ frame_alloc (enum palloc_flags flags)
   /* If memory is full, we must evict a page to make room */
   if (kpage == NULL) {
     kpage = frame_evict();
+    ASSERT (!lock_held_by_current_thread (&frame_lock));
 
     /* If a zeroed page is requested, we zero the evicted page */
     if (flags & PAL_ZERO) {
       memset(kpage, 0, PGSIZE);
     }
+  } else {
+    size_t frame_index = get_page_index(kpage);
+    ASSERT(frame_index < get_user_pages());
+
+    struct frame_table_entry *frame = &frame_table[frame_index];
+    frame->pinned = true;
+    list_init (&frame->owners);
   }
   
-  size_t frame_index = get_page_index(kpage);
-  ASSERT(frame_index < get_user_pages());
-
-  struct frame_table_entry *frame = &frame_table[frame_index];
-  frame->pinned = false;
-  list_init (&frame->owners);
-
-  lock_release(&frame_lock);
   return kpage;   
 }
 

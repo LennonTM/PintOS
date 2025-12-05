@@ -762,6 +762,8 @@ load_page_from_swap (uint8_t *upage, bool writable, size_t index)
   swap_in (kpage, index);
   /* Restore dirty bit since only dirty pages are written to swap */
   pagedir_set_dirty (thread_current()->process->pagedir, upage, true);
+  /* we have finished loading, unpin the frame */
+  frame_unpin (kpage);
   return kpage;
 }
 
@@ -796,6 +798,8 @@ load_page_from_file (uint8_t *upage, bool writable,
   uint32_t page_zero_bytes = PGSIZE - page_read_bytes;
   memset (kpage + page_read_bytes, 0, page_zero_bytes);
 
+  /* we have finished loading, unpin the frame */
+  frame_unpin (kpage);
   return kpage;
 }
 
@@ -804,7 +808,10 @@ load_page_from_file (uint8_t *upage, bool writable,
 uint8_t *
 load_page_zeroing (uint8_t *upage, bool writable)
 {
-  return load_page(PAL_USER | PAL_ZERO, upage, writable);
+  uint8_t *kpage = load_page(PAL_USER | PAL_ZERO, upage, writable);
+  /* we have finished loading, unpin the frame */
+  frame_unpin (kpage);
+  return kpage;
 }
 
 /* Populates Supplementary page table of the process with
