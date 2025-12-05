@@ -240,6 +240,9 @@ frame_install_page (void *upage, void *kpage, bool writable)
   struct frame_owner *owner =
     (struct frame_owner *) malloc (sizeof (struct frame_owner));
   if (owner == NULL) {
+    /* Uninstall the page that was just installed 
+       to avoid inconsistent state */
+    uninstall_page (upage);
     return false;
   }
   owner->upage = upage;

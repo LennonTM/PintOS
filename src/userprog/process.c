@@ -91,14 +91,19 @@ process_execute (const char *cmd_line)
      the process successfully loads */
   struct start_process_args *start_process_args =
     malloc (sizeof(struct start_process_args));
-  if (start_process_args == NULL)
+  if (start_process_args == NULL) {
+    free (entry);
     return TID_ERROR;
+  }
 
   /* Allocate a page for cmd_line_cpy 
      Must always be freed when process successfully loads */
   cmd_line_copy = palloc_get_page (0);
-  if (cmd_line_copy == NULL)
+  if (cmd_line_copy == NULL) {
+    free (start_process_args);
+    free (entry);
     return TID_ERROR;
+  }
   /* Make a copy of CMD_LINE to avoid race condition
      between the caller and load() */
   strlcpy (cmd_line_copy, cmd_line, PGSIZE);
@@ -792,7 +797,10 @@ load_page_from_file (uint8_t *upage, bool writable,
 
   /* Load data into the page. */
   file_seek (file, ofs);
-  if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes){
+  if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes) {
+    /* Clear the page table entry before freeing the frame */
+    uninstall_page (upage);
+    frame_free (kpage);
     return NULL; 
   }
   uint32_t page_zero_bytes = PGSIZE - page_read_bytes;

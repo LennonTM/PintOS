@@ -20,12 +20,11 @@ void
 mmap_table_destroy (struct mmap_table *mmap_table)
 {
   struct list *list = &mmap_table->list;
-  struct list_elem *e = list_begin (list);
-  while (e != list_end (list)) {
+  while (!list_empty (list)) {
+    struct list_elem *e = list_front (list);
     struct mmap_entry *entry = list_entry (e, struct mmap_entry, elem);
     ASSERT (entry != NULL);
-    /* Remove list_elem from the list before freeing the entry */
-    e = list_remove (e);
+    /* mmap_free_entry removes the entry from the list and frees it */
     mmap_free_entry (entry);
   }
 }
@@ -64,8 +63,11 @@ mapid_t
 mmap_new_entry (struct mmap_table *mmap_table, void *upage, struct file *file)
 {
   struct list *list = &mmap_table->list;
-  mapid_t id = get_next_mapid (mmap_table);
   struct mmap_entry *entry = malloc (sizeof (struct mmap_entry));
+  if (entry == NULL) {
+    return MAP_FAILED;
+  }
+  mapid_t id = get_next_mapid (mmap_table);
   entry->id = id;
   entry->no_pages = 0;
   entry->upage = upage;
@@ -93,5 +95,6 @@ mmap_free_entry (struct mmap_entry *entry)
     upage += PGSIZE;
   }
   list_remove (&entry->elem);
+  file_close (entry->file);
   free (entry);
 }

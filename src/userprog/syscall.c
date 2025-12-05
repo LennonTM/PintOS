@@ -231,7 +231,11 @@ open (const char *file_name) {
   struct file* file = filesys_open(file_name);
   if (file == NULL)
     return INVALID_FILE_ERROR;
-  return add_file (&thread_current()->process->fd_table, file);
+  int fd = add_file (&thread_current()->process->fd_table, file);
+  if (fd == INVALID_FILE_ERROR) {
+    file_close(file);
+  }
+  return fd;
 }
 
 static void
@@ -478,8 +482,15 @@ static mapid_t mmap (int fd, void *addr) {
 
   struct mmap_table* mmap_table = &thread_current()->process->mmap_table;
   struct file* file = file_reopen(og_file);
+  if (file == NULL) {
+    return MAP_FAILED;
+  }
   int ofs = 0;
   mapid_t map_id = mmap_new_entry(mmap_table, addr, file);
+  if (map_id == MAP_FAILED) {
+    file_close(file);
+    return MAP_FAILED;
+  }
   while (length > 0) {
     int read_bytes = min(length, PGSIZE);
     mmap_increment_pages (mmap_table, map_id);

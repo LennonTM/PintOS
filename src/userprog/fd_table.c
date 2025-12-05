@@ -44,8 +44,11 @@ get_next_fd (struct fd_table* fd_table) {
 int
 add_file (struct fd_table* fd_table, struct file* file) {
   struct list* list = &fd_table->list;
+  struct fd_entry* entry = malloc (sizeof(struct fd_entry));
+  if (entry == NULL) {
+    return -1;
+  }
   int fd = get_next_fd (fd_table);
-  struct fd_entry* entry =  malloc (sizeof(struct fd_entry));
   entry->fd = fd;
   entry->file = file;
   list_push_back(list, &entry->elem);
