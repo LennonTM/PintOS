@@ -43,4 +43,6 @@ void spt_remove_page (void *upage);
 enum page_status get_page_status (const void *upage);
 void set_page_status (const void *upage, enum page_status status);
 
+bool spt_claim_page (void *fault_page, void *esp);
+
 #endif 

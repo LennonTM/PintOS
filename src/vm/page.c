@@ -11,6 +11,9 @@
 
 #include <stdio.h>
 
+#define STACK_GROWTH_THRESHOLD 32
+#define STACK_GROWTH_MAX_SIZE 0x800000
+
 /* Hash function for SPT entries based on upage. */
 unsigned
 spt_hash (const struct hash_elem *p_, void *aux UNUSED)
@@ -210,3 +213,57 @@ void set_page_status (const void *upage, enum page_status status) {
   pagedir_set_avl (pd, upage, status);
 }
 
+/* Claims a new page for the current process at fault_addr, 
+   and passes in the stack pointer to check for a valid_stack_growth
+   (the case in which no page table entry exists yet) */
+bool spt_claim_page (void *fault_addr, void *esp) 
+{
+  struct process *proc = thread_current()->process; 
+  void *fault_page = pg_round_down(fault_addr);
+
+  /* Check via SPT */
+  struct spt_entry *spt_entry = spt_get_entry (&proc->spt, fault_page);
+  enum page_status status = get_page_status (fault_page);
+
+  switch (status) {
+    case SPT_INVALID:
+      break;
+    case SPT_SWAP:
+      spt_load_swap_page (fault_page);
+      set_page_status (fault_page, SPT_FRAME);
+      return true;
+    case SPT_FILE:
+    case SPT_EXEC:
+      /* Page is to be lazy-loaded from a file
+          for both executable page and file page */
+      spt_load_file_page (spt_entry);
+      set_page_status (fault_page, status);
+      return true;
+    case SPT_SHARED:
+      spt_load_shared_page (spt_entry);
+      set_page_status (fault_page, SPT_SHARED);
+      return true;
+    case SPT_FRAME:
+      PANIC ("FRAME page must always be present");
+  }
+
+
+  /* Check for stack growth */
+  if (is_user_vaddr (fault_addr) 
+      && fault_addr >= esp - STACK_GROWTH_THRESHOLD) 
+  {
+    /* Verify that the stack is less than STACK_GROWTH_MAX_SIZE */
+    if (fault_addr < PHYS_BASE - STACK_GROWTH_MAX_SIZE)
+      process_exit (PROC_ERR);
+    /* Load the page */
+    void *kpage = load_page_zeroing(fault_page, true);
+    if (kpage == NULL) {
+      process_exit (PROC_ERR);
+    }
+    /* Successfully grew the stack */
+    set_page_status (fault_page, SPT_FRAME);
+    return true;
+  }
+
+  return false;
+}

@@ -17,8 +17,6 @@ static void kill (struct intr_frame *);
 static void page_fault (struct intr_frame *);
 
 #define CONTROLLED_PAGE_FAULT 0xffffffff
-#define STACK_GROWTH_THRESHOLD 32
-#define STACK_GROWTH_MAX_SIZE 0x800000
 
 /* Registers handlers for interrupts that can be caused by user
    programs.
@@ -155,59 +153,12 @@ page_fault (struct intr_frame *f)
   user = (f->error_code & PF_U) != 0;
 
   struct process *proc = thread_current()->process; 
-  void *fault_page = pg_round_down(fault_addr);
 
   if (not_present) {
-    /* Check via SPT */
     ASSERT (user || proc->recover_flag);
-    
-    struct spt_entry *spt_entry = spt_get_entry (&proc->spt, fault_page);
-    enum page_status status = get_page_status (fault_page);
-
-    switch (status) {
-      case SPT_INVALID:
-        break;
-      case SPT_SWAP:
-        spt_load_swap_page (fault_page);
-        set_page_status (fault_page, SPT_FRAME);
-        return;
-      case SPT_FILE:
-      case SPT_EXEC:
-        /* Page is to be lazy-loaded from a file
-            for both executable page and file page */
-        spt_load_file_page (spt_entry);
-        set_page_status (fault_page, status);
-        return;
-      case SPT_SHARED:
-        spt_load_shared_page (spt_entry);
-        set_page_status (fault_page, SPT_SHARED);
-        return;
-      case SPT_FRAME:
-        PANIC ("FRAME page must always be present");
-    }
-  
-
-    /* Check for stack growth */
     void *esp = user ? f->esp : proc->esp;
-    if (is_user_vaddr (fault_addr) 
-        && fault_addr >= esp - STACK_GROWTH_THRESHOLD) 
-    {
-      /* Kernel can attempt user stack access only when
-        accessing user memory in a system call, so
-        recover_flag must have been set */
-      ASSERT (user || proc->recover_flag);
-      /* Verify that the stack is less than STACK_GROWTH_MAX_SIZE */
-      if (fault_addr < PHYS_BASE - STACK_GROWTH_MAX_SIZE)
-        process_exit (PROC_ERR);
-      /* Load the page */
-      void *kpage = load_page_zeroing(fault_page, true);
-      if (kpage == NULL) {
-        process_exit (PROC_ERR);
-      }
-      /* Successfully grew the stack */
-      set_page_status (fault_page, SPT_FRAME);
+    if (spt_claim_page(fault_addr, esp)) 
       return;
-    }
   }
 
   /* Recover if the page fault is a result of
