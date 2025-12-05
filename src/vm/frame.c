@@ -189,8 +189,7 @@ frame_alloc (enum palloc_flags flags)
   /* If memory is full, we must evict a page to make room */
   if (kpage == NULL) {
     kpage = frame_evict();
-    ASSERT (!lock_held_by_current_thread (&frame_lock));
-
+    
     /* If a zeroed page is requested, we zero the evicted page */
     if (flags & PAL_ZERO) {
       memset(kpage, 0, PGSIZE);
@@ -261,13 +260,11 @@ frame_install_page (void *upage, void *kpage, bool writable)
   owner->upage = upage;
   owner->process = thread_current()->process;
 
-  lock_acquire(&frame_lock);
-
   /* The frame must have been allocated before any calls to install */
   size_t frame_index = get_page_index(kpage);
   struct frame_table_entry *frame = &frame_table[frame_index];
+  lock_acquire(&frame->lock);
   list_push_front (&frame->owners, &owner->elem);
-  
-  lock_release(&frame_lock);
+  lock_release(&frame->lock);
   return true;
 }
