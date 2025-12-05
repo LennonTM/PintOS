@@ -21,6 +21,7 @@ struct process
   {
     uint32_t *pagedir;      /* Process page directory. */
     struct hash spt;        /* Supplementary page table */
+    struct lock spt_lock;   /* Protects SPT and pagedir during eviction/faults */
     struct thread *thread;  /* Process underlying kernel thread. */
     bool recover_flag;      /* Indicates whether the page fault
                                needs to be recovered from, without

@@ -84,10 +84,19 @@ frame_evict (void)
      with frame_free which could modify owners list in between */
   lock_acquire(&victim->lock);
   lock_release(&frame_lock);
+  
   struct list_elem *e = list_begin (&victim->owners);
   while (e != list_end (&victim->owners))
   {
     struct frame_owner *owner = list_entry (e, struct frame_owner, elem);
+
+    /* Acquire owner's spt_lock to safely access and modify their SPT/pagedir
+       The lock is only acquired on page fault, so we are sure it is not
+       being held at the moment. However once the present bit is cleared,
+       the owner can page fault on it, but it will wait for the lock to
+       be released before accessing the SPT/pagedir. */
+    lock_acquire (&owner->process->spt_lock);
+
     struct spt_entry *spte =
       spt_get_entry(&owner->process->spt, owner->upage);
     uint32_t *pd = owner->process->pagedir;
@@ -113,7 +122,7 @@ frame_evict (void)
         break;
       case SPT_SHARED:
         ASSERT (!writable);
-        unlink_shared_entry (spte->file, spte->ofs, spte, pd);
+        unlink_shared_entry (spte->file, spte->ofs, spte, pd, true);
         break;
       case SPT_EXEC:
         /* Dirty exec pages: remove SPT entry 
@@ -139,6 +148,8 @@ frame_evict (void)
       case SPT_INVALID:
         PANIC ("Evicted invalid SPT");
     }
+
+    lock_release (&owner->process->spt_lock);
 
     /* Get the next element before freeing the owner */
     struct list_elem *next_e = list_next (e);

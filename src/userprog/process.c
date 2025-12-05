@@ -161,6 +161,7 @@ process_init (struct thread *t)
   if (!spt_initialised) {
     PANIC ("Failed to initialised spt page: kernel ran out of memory");
   }
+  lock_init (&process->spt_lock);
   
   /* Initialise process attributes. */
   process->pagedir = NULL;
@@ -755,7 +756,8 @@ load_page(enum palloc_flags flags, uint8_t *upage, bool writable) {
 }
 
 
-/* Loads a page from swap space into memory. */
+/* Loads a page from swap space into memory. 
+   Leaves frame PINNED after frame_alloc() - caller must unpin. */
 uint8_t *
 load_page_from_swap (uint8_t *upage, bool writable, size_t index)
 {
@@ -767,8 +769,6 @@ load_page_from_swap (uint8_t *upage, bool writable, size_t index)
   swap_in (kpage, index);
   /* Restore dirty bit since only dirty pages are written to swap */
   pagedir_set_dirty (thread_current()->process->pagedir, upage, true);
-  /* we have finished loading, unpin the frame */
-  frame_unpin (kpage);
   return kpage;
 }
 
@@ -784,6 +784,7 @@ load_page_from_swap (uint8_t *upage, bool writable, size_t index)
    A page initialized by this function must be writable by the
    user process if WRITABLE is true, read-only otherwise.
 
+   Leaves frame PINNED - caller must unpin.
    If successful, returns kernel virtual address of the frame assigned,
    If a memory allocation error or disk read error occurs, return NULL. */
 uint8_t *
@@ -806,19 +807,16 @@ load_page_from_file (uint8_t *upage, bool writable,
   uint32_t page_zero_bytes = PGSIZE - page_read_bytes;
   memset (kpage + page_read_bytes, 0, page_zero_bytes);
 
-  /* we have finished loading, unpin the frame */
-  frame_unpin (kpage);
   return kpage;
 }
 
-/* Loads a page at upage and fills it with zeros. Installs it into the page 
-   table and frame table. */
+/* Loads a page at upage and fills it with zeros. 
+   Installs it into the page table and frame table. 
+   Leaves frame PINNED - caller must set status and unpin. */
 uint8_t *
 load_page_zeroing (uint8_t *upage, bool writable)
 {
   uint8_t *kpage = load_page(PAL_USER | PAL_ZERO, upage, writable);
-  /* we have finished loading, unpin the frame */
-  frame_unpin (kpage);
   return kpage;
 }
 
@@ -873,13 +871,11 @@ static bool
 setup_stack (void **esp) 
 {
   void *upage = ((uint8_t *) PHYS_BASE) - PGSIZE;
-  void *kpage = load_page_zeroing(upage, true);
-  if (kpage == NULL) {
+  if (!spt_load_zeroed_page (upage)) {
     process_exit (PROC_ERR);
   }
 
   *esp = PHYS_BASE;
-  set_page_status (upage, SPT_FRAME);
   return true;
 }
 

@@ -129,7 +129,9 @@ pagedir_set_page (uint32_t *pd, void *upage, void *kpage, bool writable)
   if (pte != NULL) 
     {
       ASSERT ((*pte & PTE_P) == 0);
-      *pte = pte_create_user (kpage, writable);
+      /* Preserve AVL bits (page status) when installing the page */
+      uint32_t avl_bits = *pte & PTE_AVL;
+      *pte = pte_create_user (kpage, writable) | avl_bits;
       return true;
     }
   else

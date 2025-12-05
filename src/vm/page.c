@@ -97,7 +97,7 @@ spt_destroy_entry (struct hash_elem *e, void *aux UNUSED)
       break;
     case SPT_SHARED:
       if (kpage != NULL) {
-        unlink_shared_entry (spte->file, spte->ofs, spte, pd);
+        unlink_shared_entry (spte->file, spte->ofs, spte, pd, false);
       }
       break;
     case SPT_SWAP:
@@ -133,31 +133,52 @@ spt_remove_entry (struct hash *spt, struct spt_entry *spte) {
   return removed_elem != NULL;
 }
 
-/* Loads a writable page from file into memory. */
+/* Loads a page from swap into memory. Sets status to SPT_FRAME and unpins. */
 bool
 spt_load_swap_page (void *upage)
 {
   uint32_t *pd = thread_current()->process->pagedir;
   bool writable = pagedir_is_writable (pd, upage);
   size_t swap_slot = pagedir_get_swap (pd, upage);
-  bool success = load_page_from_swap (upage,
-                                      writable,
-                                      swap_slot);
-  return success;
+  uint8_t *kpage = load_page_from_swap (upage, writable, swap_slot);
+  if (kpage == NULL)
+    return false;
+  /* Set status to SPT_FRAME before unpinning to avoid race with eviction */
+  set_page_status (upage, SPT_FRAME);
+  frame_unpin (kpage);
+  return true;
 }
 
-/* Loads a writable page from file into memory. */
-uint8_t *
+/* Loads a zeroed page for stack growth. 
+   Sets status to SPT_FRAME and unpins. */
+bool
+spt_load_zeroed_page (void *upage)
+{
+  uint8_t *kpage = load_page_zeroing (upage, true);
+  if (kpage == NULL)
+    return false;
+  /* Set status to SPT_FRAME before unpinning to avoid race with eviction */
+  set_page_status (upage, SPT_FRAME);
+  frame_unpin (kpage);
+  return true;
+}
+
+/* Loads a page from file into memory. Explicitly sets status and unpins. */
+bool
 spt_load_file_page (struct spt_entry *spte)
 {
   uint32_t *pd = thread_current()->process->pagedir;
   bool writable = pagedir_is_writable (pd, spte->upage);
-  uint8_t *kpage = load_page_from_file (spte->upage,
-                                        writable,
-                                        spte->file, 
-                                        spte->ofs,
+  enum page_status status = get_page_status (spte->upage); 
+  uint8_t *kpage = load_page_from_file (spte->upage, writable,
+                                        spte->file, spte->ofs,
                                         spte->page_read_bytes);
-  return kpage;
+  if (kpage == NULL)
+    return false;
+  /* Status (SPT_FILE/SPT_EXEC) is preserved by pagedir_set_page */
+  set_page_status (spte->upage, status);
+  frame_unpin (kpage);
+  return true;
 }
 
 /* Loads a shared read-only page, reusing existing frame if available. */
@@ -179,17 +200,21 @@ spt_load_shared_page (struct spt_entry *spte)
   lock_acquire (&shared_entry->lock);
   uint8_t *kpage = shared_entry->kpage;
   if (kpage == NULL) {
-    /* Load new page */
-    kpage = spt_load_file_page(spte);
+    /* Load new page - use load_page_from_file directly to control pinning */
+    kpage = load_page_from_file (spte->upage, writable, spte->file,
+                                 spte->ofs, spte->page_read_bytes);
     if (kpage == NULL) {
       lock_release (&shared_entry->lock);
-      unlink_shared_entry (spte->file, spte->ofs, spte, pd);
+      unlink_shared_entry (spte->file, spte->ofs, spte, pd, false);
       return false;
     }
     shared_entry->kpage = kpage;
+    set_page_status (spte->upage, SPT_SHARED);
+    frame_unpin (kpage);
   } else {
     /* Install an existing page */
     frame_install_page (spte->upage, kpage, writable);
+    set_page_status (spte->upage, SPT_SHARED);
   }
   lock_release (&shared_entry->lock);
   return true;
@@ -222,29 +247,35 @@ bool spt_claim_page (void *fault_addr, void *esp)
   struct process *proc = thread_current()->process; 
   void *fault_page = pg_round_down(fault_addr);
 
+  /* Acquire spt_lock to safely read SPT and page status.
+     We release before calling load functions to avoid deadlock:
+     load functions may call frame_alloc() which may evict frames,
+     and eviction needs to acquire owner's spt_lock. */
+  lock_acquire (&proc->spt_lock);
+
   /* Check via SPT */
   struct spt_entry *spt_entry = spt_get_entry (&proc->spt, fault_page);
   enum page_status status = get_page_status (fault_page);
 
   switch (status) {
     case SPT_INVALID:
+      lock_release (&proc->spt_lock);
       break;
     case SPT_SWAP:
+      lock_release (&proc->spt_lock);
       spt_load_swap_page (fault_page);
-      set_page_status (fault_page, SPT_FRAME);
       return true;
     case SPT_FILE:
     case SPT_EXEC:
-      /* Page is to be lazy-loaded from a file
-          for both executable page and file page */
+      lock_release (&proc->spt_lock);
       spt_load_file_page (spt_entry);
-      set_page_status (fault_page, status);
       return true;
     case SPT_SHARED:
+      lock_release (&proc->spt_lock);
       spt_load_shared_page (spt_entry);
-      set_page_status (fault_page, SPT_SHARED);
       return true;
     case SPT_FRAME:
+      lock_release (&proc->spt_lock);
       PANIC ("FRAME page must always be present");
   }
 
@@ -263,13 +294,10 @@ bool spt_claim_page (void *fault_addr, void *esp)
     /* Verify that the stack is less than STACK_GROWTH_MAX_SIZE */
     if (fault_addr < PHYS_BASE - STACK_GROWTH_MAX_SIZE)
       process_exit (PROC_ERR);
-    /* Load the page */
-    void *kpage = load_page_zeroing(fault_page, true);
-    if (kpage == NULL) {
+    /* Load the page - spt_load_zeroed_page sets status and unpins */
+    if (!spt_load_zeroed_page (fault_page)) {
       process_exit (PROC_ERR);
     }
-    /* Successfully grew the stack */
-    set_page_status (fault_page, SPT_FRAME);
     return true;
   }
 

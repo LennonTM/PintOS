@@ -112,10 +112,13 @@ link_to_shared_entry (struct file *file, off_t offset,
   return shared_entry;
 }
 
-/* Unlinks spt_entry from shared entry, destroying entry if last reference. */
+/* Unlinks spt_entry from shared entry, destroying entry if last reference.
+   If is_eviction is true, invalidates shared_entry->kpage since the frame
+   is being freed and will be reused. */
 void
 unlink_shared_entry (struct file *file, off_t offset,
-                     struct spt_entry *spt_entry, uint32_t *pd)
+                     struct spt_entry *spt_entry, uint32_t *pd,
+                     bool is_eviction)
 {
   /* Use pd parameter, not thread_current()->process->pagedir,
      since this may be called during eviction from another process's context */
@@ -123,11 +126,20 @@ unlink_shared_entry (struct file *file, off_t offset,
   bool writable = pagedir_is_writable (pd, spt_entry->upage);
   ASSERT (!writable);
   /* Unlink while holding a shared table lock to ensure that
-     no other process links to the entry for given {file, offset}
-     This allows to  */
+     no other process links to the entry for given {file, offset} */
   lock_acquire (&shared_table_lock);
   struct shared_entry *shared_entry = get_shared_entry (file, offset);
   ASSERT (shared_entry != NULL);
+
+  /* During eviction, the frame is being freed and will be reused.
+     Invalidate kpage so other processes reload from file instead of
+     using a stale pointer. */
+  if (is_eviction) {
+    lock_acquire (&shared_entry->lock);
+    shared_entry->kpage = NULL;
+    lock_release (&shared_entry->lock);
+  }
+
   shared_entry->reference_count--;
   if (shared_entry->reference_count == 0) {
     /* Destroy the entry if the process was the last one sharing it */
