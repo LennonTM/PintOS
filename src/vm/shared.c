@@ -117,7 +117,9 @@ void
 unlink_shared_entry (struct file *file, off_t offset,
                      struct spt_entry *spt_entry, uint32_t *pd)
 {
-  ASSERT (get_page_status (spt_entry->upage) == SPT_SHARED);
+  /* Use pd parameter, not thread_current()->process->pagedir,
+     since this may be called during eviction from another process's context */
+  ASSERT (pagedir_get_avl (pd, spt_entry->upage) == SPT_SHARED);
   bool writable = pagedir_is_writable (pd, spt_entry->upage);
   ASSERT (!writable);
   /* Unlink while holding a shared table lock to ensure that
@@ -137,8 +139,10 @@ unlink_shared_entry (struct file *file, off_t offset,
   }
   else {
     /* If other processes still share the frame
-       Uninstall the page pointing to it */
-    uninstall_page (spt_entry->upage);
+       Uninstall the page pointing to it.
+       Use pd parameter since this may be called during eviction
+       from another process's context */
+    pagedir_clear_page (pd, spt_entry->upage);
   }
   lock_release (&shared_table_lock);
 }

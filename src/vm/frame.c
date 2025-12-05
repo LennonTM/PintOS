@@ -78,12 +78,12 @@ frame_evict (void)
   }
 
   ASSERT(victim != NULL);
-  /* pin the frame until it has finished loading, 
-     so we are free to release the lock */
+  /* pin the frame until it has finished loading */
   victim->pinned = true;
-  lock_release(&frame_lock);
-
+  /* Acquire victim->lock before releasing frame_lock to prevent race
+     with frame_free which could modify owners list in between */
   lock_acquire(&victim->lock);
+  lock_release(&frame_lock);
   struct list_elem *e = list_begin (&victim->owners);
   while (e != list_end (&victim->owners))
   {
@@ -119,7 +119,10 @@ frame_evict (void)
         /* Dirty exec pages: remove SPT entry 
            (no longer file-backed) and swap out */
         if (is_dirty) {
-          spt_remove_entry (&owner->process->spt, spte);
+          /* Remove SPT entry without calling spt_destroy_entry, since
+             we're not in the owner's context (wrong thread_current) */
+          hash_delete (&owner->process->spt, &spte->elem);
+          free (spte);
           size_t swap_index = swap_out(kpage);
           pagedir_set_swap(pd, owner->upage, swap_index);
         }
@@ -208,6 +211,9 @@ frame_free (void *kpage)
 
   struct frame_table_entry *frame = &frame_table[frame_index];
 
+  /* Acquire frame_lock first to synchronize with eviction's access-bit
+     checking loop, which iterates over owners while holding frame_lock */
+  lock_acquire(&frame_lock);
   lock_acquire(&frame->lock);
 
   struct list_elem *e = list_begin(&frame->owners);
@@ -239,6 +245,7 @@ frame_free (void *kpage)
   }
 
   lock_release(&frame->lock);
+  lock_release(&frame_lock);
 }
 
 /* Installs mapping from upage to kpage and registers ownership. */
